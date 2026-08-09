@@ -7,6 +7,30 @@ import (
 	_ "github.com/lib/pq"
 )
 
+var migrateSQL = fmt.Sprintf(`
+	CREATE EXTENSION IF NOT EXISTS vector;
+
+	CREATE TABLE IF NOT EXISTS code_chunks (
+		id          SERIAL PRIMARY KEY,
+		file_path   TEXT NOT NULL,
+		rel_path    TEXT NOT NULL,
+		start_line  INT,
+		end_line    INT,
+		content     TEXT NOT NULL,
+		embedding   vector(%d),
+		indexed_at  TIMESTAMP DEFAULT NOW()
+	);
+
+	-- Fast ANN search index
+	CREATE INDEX IF NOT EXISTS code_chunks_embedding_idx
+		ON code_chunks USING ivfflat (embedding vector_cosine_ops)
+		WITH (lists = 100);
+
+	-- For fast deletion by file when re-indexing
+	CREATE INDEX IF NOT EXISTS code_chunks_rel_path_idx
+		ON code_chunks (rel_path);
+`, EmbeddingDim)
+
 type Store struct {
 	db *sql.DB
 }
@@ -22,31 +46,15 @@ func NewStore(databaseURL string) (*Store, error) {
 	return &Store{db: db}, nil
 }
 
-// Migrate creates the table and vector index if they don't exist
+// Migrate creates the table and vector index if they don't exist.
+//
+// NOTE: `vector(N)` in the schema is fixed at whatever EmbeddingDim was
+// when the table was first created (CREATE TABLE IF NOT EXISTS won't
+// alter an existing table's column type). If you change embedding
+// providers/dimensions after the table already exists, drop
+// `code_chunks` first and re-run a full index.
 func (s *Store) Migrate() error {
-	_, err := s.db.Exec(`
-		CREATE EXTENSION IF NOT EXISTS vector;
-
-		CREATE TABLE IF NOT EXISTS code_chunks (
-			id          SERIAL PRIMARY KEY,
-			file_path   TEXT NOT NULL,
-			rel_path    TEXT NOT NULL,
-			start_line  INT,
-			end_line    INT,
-			content     TEXT NOT NULL,
-			embedding   vector(1536),
-			indexed_at  TIMESTAMP DEFAULT NOW()
-		);
-
-		-- Fast ANN search index
-		CREATE INDEX IF NOT EXISTS code_chunks_embedding_idx
-			ON code_chunks USING ivfflat (embedding vector_cosine_ops)
-			WITH (lists = 100);
-
-		-- For fast deletion by file when re-indexing
-		CREATE INDEX IF NOT EXISTS code_chunks_rel_path_idx
-			ON code_chunks (rel_path);
-	`)
+	_, err := s.db.Exec(migrateSQL)
 	return err
 }
 
