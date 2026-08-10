@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 	"time"
+
+	"github.com/devportal/retrieval"
 )
 
 func main() {
@@ -24,7 +26,7 @@ func main() {
 	cfg := LoadConfig()
 
 	// Connect to Supabase
-	store, err := NewStore(cfg.DatabaseURL)
+	store, err := retrieval.NewStore(cfg.DatabaseURL)
 	if err != nil {
 		log.Fatalf("DB connection failed: %v", err)
 	}
@@ -34,12 +36,12 @@ func main() {
 		log.Fatalf("Migration failed: %v", err)
 	}
 
-	var embedder Embedder
+	var embedder retrieval.Embedder
 	switch cfg.EmbeddingProvider {
 	case "voyage":
-		embedder = NewVoyageEmbedder(cfg.VoyageKey)
+		embedder = retrieval.NewVoyageEmbedder(cfg.VoyageKey)
 	case "openai":
-		embedder = NewOpenAIEmbedder(cfg.OpenAIKey)
+		embedder = retrieval.NewOpenAIEmbedder(cfg.OpenAIKey)
 	default:
 		log.Fatalf("unknown embedding provider %q", cfg.EmbeddingProvider)
 	}
@@ -91,9 +93,14 @@ func main() {
 
 		// Embed and store each chunk
 		for _, chunk := range chunks {
-			embedding, tokensUsed, err := embedder.Embed(chunk.Content)
+			// Prepend the file path so chunks are findable by filename, not
+			// just by how similar their content sounds to the query — e.g.
+			// asking about "Config/DefaultEngine.ini" by name should match
+			// its chunks even though the file's content never mentions its
+			// own filename.
+			embedding, tokensUsed, err := embedder.Embed(chunk.RelPath + "\n\n" + chunk.Content)
 			if err != nil {
-				if errors.Is(err, ErrRateLimited) {
+				if errors.Is(err, retrieval.ErrRateLimited) {
 					log.Fatalf("  Embedding rate limited at %s:%d — stopping (indexed %d chunks, %d tokens before this): %v",
 						file.RelPath, chunk.StartLine, totalChunks, totalTokens, err)
 				}

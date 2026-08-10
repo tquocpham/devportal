@@ -1,0 +1,36 @@
+# Copy to config.local.yaml and fill in real values. config.local.yaml is
+# gitignored — never commit it.
+
+# GitHub OAuth app (Settings > Developer settings > OAuth Apps)
+github_client_id: your_github_oauth_client_id
+github_client_secret: your_github_oauth_client_secret
+callback_url: http://localhost:3000/auth/callback
+
+# Restrict login to members of this GitHub org. Leave blank to allow any
+# GitHub account (fine for local dev, not recommended once this is deployed).
+github_org: your-github-org
+
+# Random secret used to sign session JWTs, e.g. `openssl rand -base64 32`
+jwt_secret: replace_with_a_random_secret
+
+port: "3000"
+log_level: debug
+
+# The one company-paid Anthropic key that powers chat for every logged-in user.
+anthropic_api_key: sk-ant-your-anthropic-api-key
+
+# Chat generation tuning. All optional — defaults live in
+# cmd/api/lib/handlers/chat.go (DefaultChatConfig).
+# chat_model: claude-sonnet-5      # which Claude model answers questions
+# chat_max_tokens: 2048            # cap on output tokens per answer
+# chat_top_k: 6                    # chunks returned per search_codebase call
+# chat_max_history_len: 6          # server-side floor on conversation history kept
+# chat_max_iterations: 4           # max Claude round trips per question (search-loop cost cap)
+
+# Must point at the same Postgres + embedding provider cmd/indexer was run
+# with — query embeddings have to come from the same model/dimension as
+# what's stored, or similarity search is meaningless.
+database_url: postgres://postgres:postgres@localhost:5433/indexer?sslmode=disable
+embedding_provider: voyage # "voyage" or "openai"
+voyage_api_key: your_voyage_api_key
+# openai_api_key: your_openai_api_key # only needed if embedding_provider: openai

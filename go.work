@@ -3,4 +3,5 @@ go 1.26.1
 use (
 	./cmd/api
 	./cmd/indexer
+	./pkg/retrieval
 )

@@ -1,4 +1,4 @@
-package main
+package retrieval
 
 import (
 	"bytes"
@@ -17,18 +17,24 @@ import (
 // column has a fixed dimension (see store.go), so switching providers
 // always means re-running a full index, not just changing a setting.
 type Embedder interface {
-	// Embed returns the embedding vector and the number of tokens the
-	// provider billed for this call, so callers can track cumulative
-	// spend against a budget (see MaxEmbeddingTokens in config.go).
+	// Embed embeds text being stored for later retrieval (indexing time).
+	// Returns the embedding vector and the number of tokens the provider
+	// billed for this call, so callers can track cumulative spend against
+	// a budget (see MaxEmbeddingTokens in cmd/indexer's config.go).
 	Embed(text string) (embedding []float32, tokensUsed int, err error)
+
+	// EmbedQuery embeds a search query (query time). Providers that
+	// support asymmetric embeddings (Voyage's input_type) use a
+	// query-optimized representation here for better retrieval quality;
+	// providers without that distinction (OpenAI) just call Embed.
+	EmbedQuery(text string) (embedding []float32, tokensUsed int, err error)
 }
 
 // ErrRateLimited is returned when the embedding provider responds with
-// HTTP 429. Callers should treat this as fatal for the whole run rather
-// than skipping the chunk and continuing: a 429 means every subsequent
-// call will keep failing the same way until the underlying limit is
-// fixed (e.g. adding a payment method), so continuing just burns through
-// remaining quota/time and produces an incomplete index.
+// HTTP 429. Callers should treat this as fatal for a batch operation
+// (e.g. indexing) rather than skipping and continuing: a 429 means every
+// subsequent call will keep failing the same way until the underlying
+// limit is fixed (e.g. adding a payment method).
 var ErrRateLimited = errors.New("embedding provider rate limited the request")
 
 // ---- Voyage AI (recommended: code-tuned, free tier covers this project) ----
@@ -71,10 +77,18 @@ func NewVoyageEmbedder(apiKey string) Embedder {
 }
 
 func (e *voyageEmbedder) Embed(text string) ([]float32, int, error) {
+	return e.embed(text, "document")
+}
+
+func (e *voyageEmbedder) EmbedQuery(text string) ([]float32, int, error) {
+	return e.embed(text, "query")
+}
+
+func (e *voyageEmbedder) embed(text, inputType string) ([]float32, int, error) {
 	body, _ := json.Marshal(voyageEmbedRequest{
 		Input:           []string{text},
 		Model:           voyageEmbeddingModel,
-		InputType:       "document",
+		InputType:       inputType,
 		OutputDimension: EmbeddingDim,
 	})
 
@@ -148,6 +162,11 @@ func NewOpenAIEmbedder(apiKey string) Embedder {
 		apiKey: apiKey,
 		client: &http.Client{Timeout: 30 * time.Second},
 	}
+}
+
+// EmbedQuery: OpenAI has no query/document distinction, so this is Embed.
+func (e *openAIEmbedder) EmbedQuery(text string) ([]float32, int, error) {
+	return e.Embed(text)
 }
 
 func (e *openAIEmbedder) Embed(text string) ([]float32, int, error) {

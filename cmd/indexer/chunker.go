@@ -3,15 +3,11 @@ package main
 import (
 	"os"
 	"strings"
+
+	"github.com/devportal/retrieval"
 )
 
-type Chunk struct {
-	FilePath  string
-	RelPath   string
-	Content   string
-	StartLine int
-	EndLine   int
-}
+type Chunk = retrieval.Chunk
 
 const (
 	maxChunkLines = 80 // max lines per chunk

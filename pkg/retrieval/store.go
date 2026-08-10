@@ -1,4 +1,4 @@
-package main
+package retrieval
 
 import (
 	"database/sql"
@@ -21,10 +21,13 @@ var migrateSQL = fmt.Sprintf(`
 		indexed_at  TIMESTAMP DEFAULT NOW()
 	);
 
-	-- Fast ANN search index
-	CREATE INDEX IF NOT EXISTS code_chunks_embedding_idx
-		ON code_chunks USING ivfflat (embedding vector_cosine_ops)
-		WITH (lists = 100);
+	-- No ANN index on embedding: an IVFFlat index needs roughly
+	-- rows-per-list in the thousands to give good recall, and at a
+	-- single-codebase scale (hundreds to low thousands of chunks) an
+	-- approximate index costs real recall for no measurable speed win —
+	-- exact search (sequential scan) is both simpler and correct. Revisit
+	-- if this ever grows past ~100k chunks.
+	DROP INDEX IF EXISTS code_chunks_embedding_idx;
 
 	-- For fast deletion by file when re-indexing
 	CREATE INDEX IF NOT EXISTS code_chunks_rel_path_idx
