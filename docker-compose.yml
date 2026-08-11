@@ -19,5 +19,24 @@ services:
       timeout: 5s
       retries: 5
 
+  api:
+    build:
+      context: .
+      dockerfile: cmd/api/Dockerfile
+    container_name: devportal-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    ports:
+      - "3000:3000"
+    volumes:
+      # Real secrets never baked into the image. Same file you already
+      # use for `go run .` locally; see cmd/api/config.local.example.yaml.
+      # database_url in this file must point at "postgres" (the service
+      # name below), not "localhost" containers reach each other by
+      # service name on the compose network, not host ports.
+      - ./cmd/api/config.local.yaml:/app/config.local.yaml:ro
+
 volumes:
   devportal-postgres-data:

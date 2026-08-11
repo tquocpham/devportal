@@ -1,5 +1,5 @@
 # Copy to config.local.yaml and fill in real values. config.local.yaml is
-# gitignored — never commit it.
+# gitignored never commit it.
 
 # GitHub OAuth app (Settings > Developer settings > OAuth Apps)
 github_client_id: your_github_oauth_client_id

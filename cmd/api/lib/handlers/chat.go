@@ -97,7 +97,7 @@ type searchInput struct {
 	Query string `json:"query" jsonschema:"required,description=A focused search query — e.g. a filename\\, class name\\, or specific concept to look up in the indexed codebase."`
 }
 
-// Chat handles POST /api/chat (registered under the `protected` route group
+// Chat handles POST /api/v1/chat (registered under the `protected` route group
 // in main.go, so RequireAuth has already validated the session).
 func (h *ChatHandler) Chat(c echo.Context) error {
 	var req chatRequest

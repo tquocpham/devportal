@@ -8,24 +8,29 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/devportal/api/lib/users"
 	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/github"
 )
 
-type AuthHandler struct {
-	oauthCfg     *oauth2.Config
-	jwtSecret    []byte
-	allowedOrg   string
-	allowedUsers map[string]struct{}
+// Allowlist checks whether a GitHub username is permitted to log in and, if
+// so, their role. *users.Store satisfies this; kept as an interface so
+// auth.go doesn't need to import the users package's Postgres dependency
+// directly.
+type Allowlist interface {
+	Lookup(username string) (allowed bool, role users.Role, err error)
 }
 
-func NewAuthHandler(clientID, clientSecret, callbackURL, allowedOrg, jwtSecret string, allowedUsers []string) *AuthHandler {
-	users := make(map[string]struct{}, len(allowedUsers))
-	for _, u := range allowedUsers {
-		users[u] = struct{}{}
-	}
+type AuthHandler struct {
+	oauthCfg   *oauth2.Config
+	jwtSecret  []byte
+	allowedOrg string
+	allowlist  Allowlist
+}
+
+func NewAuthHandler(clientID, clientSecret, callbackURL, allowedOrg, jwtSecret string, allowlist Allowlist) *AuthHandler {
 	return &AuthHandler{
 		oauthCfg: &oauth2.Config{
 			ClientID:     clientID,
@@ -34,9 +39,9 @@ func NewAuthHandler(clientID, clientSecret, callbackURL, allowedOrg, jwtSecret s
 			Scopes:       []string{"read:org", "read:user", "user:email"},
 			Endpoint:     github.Endpoint,
 		},
-		jwtSecret:    []byte(jwtSecret),
-		allowedOrg:   allowedOrg,
-		allowedUsers: users,
+		jwtSecret:  []byte(jwtSecret),
+		allowedOrg: allowedOrg,
+		allowlist:  allowlist,
 	}
 }
 
@@ -80,10 +85,16 @@ func (h *AuthHandler) Callback(c echo.Context) error {
 		return echo.NewHTTPError(http.StatusInternalServerError, "failed to fetch orgs")
 	}
 
-	if len(h.allowedUsers) > 0 {
-		if _, ok := h.allowedUsers[user.Login]; !ok {
+	var role users.Role
+	if h.allowlist != nil {
+		allowed, r, err := h.allowlist.Lookup(user.Login)
+		if err != nil {
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to check allowlist")
+		}
+		if !allowed {
 			return echo.NewHTTPError(http.StatusForbidden, "user not allowed")
 		}
+		role = r
 	}
 
 	if h.allowedOrg != "" {
@@ -100,6 +111,7 @@ func (h *AuthHandler) Callback(c echo.Context) error {
 		"avatar": user.AvatarURL,
 		"email":  email,
 		"orgs":   orgs,
+		"role":   string(role),
 		"exp":    time.Now().Add(8 * time.Hour).Unix(),
 	})
 	signed, err := jwtToken.SignedString(h.jwtSecret)

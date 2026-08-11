@@ -30,3 +30,18 @@ func RequireAuth(jwtSecret string) echo.MiddlewareFunc {
 		}
 	}
 }
+
+// RequireAdmin must run after RequireAuth — it reads the claims RequireAuth
+// already set and requires the "admin" role.
+func RequireAdmin(next echo.HandlerFunc) echo.HandlerFunc {
+	return func(c echo.Context) error {
+		claims, ok := c.Get("user").(jwt.MapClaims)
+		if !ok {
+			return echo.NewHTTPError(http.StatusUnauthorized, "not logged in")
+		}
+		if claims["role"] != "admin" {
+			return echo.NewHTTPError(http.StatusForbidden, "admin role required")
+		}
+		return next(c)
+	}
+}

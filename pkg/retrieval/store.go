@@ -61,6 +61,18 @@ func (s *Store) Migrate() error {
 	return err
 }
 
+// CheckReady fails fast if code_chunks hasn't been created yet — used by
+// cmd/api at startup so a service pointed at an un-migrated/un-indexed
+// database fails loudly instead of erroring on the first chat request.
+func (s *Store) CheckReady() error {
+	var dummy int
+	err := s.db.QueryRow(`SELECT 1 FROM code_chunks LIMIT 1`).Scan(&dummy)
+	if err != nil && err != sql.ErrNoRows {
+		return err
+	}
+	return nil
+}
+
 // DeleteFile removes all chunks for a given file (before re-indexing it)
 func (s *Store) DeleteFile(relPath string) error {
 	_, err := s.db.Exec(`DELETE FROM code_chunks WHERE rel_path = $1`, relPath)

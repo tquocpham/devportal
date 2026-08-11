@@ -20,6 +20,7 @@ func Me(c echo.Context) error {
 		"email":    claims["email"],
 		"avatar":   claims["avatar"],
 		"orgs":     claims["orgs"],
+		"role":     claims["role"],
 		"jwt":      cookie.Value,
 	})
 }

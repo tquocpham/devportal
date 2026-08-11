@@ -2,7 +2,7 @@ package main
 
 import (
 	"context"
-	_ "embed"
+	"embed"
 	"errors"
 	"fmt"
 	"net/http"
@@ -15,6 +15,7 @@ import (
 	"github.com/anthropics/anthropic-sdk-go/option"
 	"github.com/devportal/api/lib/handlers"
 	mw "github.com/devportal/api/lib/middleware"
+	"github.com/devportal/api/lib/users"
 	"github.com/devportal/retrieval"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
@@ -22,8 +23,12 @@ import (
 	"github.com/spf13/viper"
 )
 
-//go:embed web/index.html
-var chatUIHTML string
+// web directory holds index.html, style.css, and app.js to be served as
+// static assets via StaticFS below, which defaults "/" to index.html the
+// same way a normal web server would.
+//
+//go:embed web
+var webFS embed.FS
 
 func Serve(e *echo.Echo, addr string) error {
 	errCh := make(chan error, 1)
@@ -66,7 +71,7 @@ func main() {
 	}
 
 	// Retrieval + generation config. database_url and embedding_provider
-	// must match whatever cmd/indexer was configured with — the query
+	// must match whatever cmd/indexer was configured with. The query
 	// embedding has to come from the same model/dimension as what's
 	// stored, or similarity search is meaningless. anthropic_api_key is
 	// the one company-paid key that powers chat for every logged-in user.
@@ -101,11 +106,11 @@ func main() {
 
 	e := echo.New()
 	e.Use(middleware.RequestLoggerWithConfig(middleware.RequestLoggerConfig{
-		LogURI:     true,
-		LogStatus:  true,
-		LogMethod:  true,
-		LogLatency: true,
-		LogError:   true,
+		LogURI:      true,
+		LogStatus:   true,
+		LogMethod:   true,
+		LogLatency:  true,
+		LogError:    true,
 		HandleError: true,
 		LogValuesFunc: func(c echo.Context, v middleware.RequestLoggerValues) error {
 			entry := logger.WithFields(logrus.Fields{
@@ -124,15 +129,24 @@ func main() {
 	}))
 	e.Use(middleware.Recover())
 
-	allowedUsers := []string{
-		"tquocpham",
+	userStore, err := users.NewStore(databaseURL)
+	if err != nil {
+		logger.Fatalf("users DB connection failed: %v", err)
+	}
+	if err := userStore.CheckSchema(); err != nil {
+		logger.Fatalf("allowed_users table not ready; run cmd/api/migrations/migrate.sh via CI/CD first: %v", err)
 	}
 
-	auth := handlers.NewAuthHandler(githubClientID, githubClientSecret, callbackURL, allowedOrg, jwtSecret, allowedUsers)
+	auth := handlers.NewAuthHandler(
+		githubClientID, githubClientSecret, callbackURL, allowedOrg,
+		jwtSecret, userStore)
 
 	store, err := retrieval.NewStore(databaseURL)
 	if err != nil {
 		logger.Fatalf("DB connection failed: %v", err)
+	}
+	if err := store.CheckReady(); err != nil {
+		logger.Fatalf("code_chunks table not ready; run cmd/indexer first: %v", err)
 	}
 
 	var embedder retrieval.Embedder
@@ -150,14 +164,36 @@ func main() {
 
 	e.GET("/auth/github", auth.Login)
 	e.GET("/auth/callback", auth.Callback)
-	e.GET("/", func(c echo.Context) error {
-		return c.HTMLBlob(http.StatusOK, []byte(chatUIHTML))
-	})
+	webAssets := echo.MustSubFS(webFS, "web")
+	e.StaticFS("/", webAssets)
 
-	protected := e.Group("")
+	// Prefix must be non-empty ("/api", not ""): Group.Use registers its own
+	// catch-all route at prefix+"/*" so the middleware always fires, and an
+	// empty prefix puts that catch-all at "/*", the exact pattern the
+	// StaticFS route above uses, silently replacing it with an auth-gated
+	// 404 for every path, including "/" itself. A real prefix keeps that
+	// catch-all scoped to "/api/v1/*", where it belongs.
+	protected := e.Group("/api/v1")
 	protected.Use(mw.RequireAuth(jwtSecret))
-	protected.GET("/api/me", handlers.Me)
-	protected.POST("/api/chat", chat.Chat)
+	protected.GET("/me", handlers.Me)
+	protected.POST("/chat", chat.Chat)
+
+	// Stubs for Phase 3 (docs/phase-3-aws-access-plan.md): real routes,
+	// not yet real AWS calls. See handlers.AWSLFSAccessKeyStub.
+	protected.POST("/aws/lfs-access-key", handlers.AWSLFSAccessKeyStub)
+	protected.DELETE("/aws/lfs-access-key", handlers.AWSLFSAccessKeyDeleteStub)
+	protected.POST("/aws/console-access", handlers.AWSConsoleAccessStub)
+	protected.POST("/aws/sts-credentials", handlers.AWSSTSCredentialsStub)
+
+	adminUsers := handlers.NewAdminUsersHandler(userStore)
+	assumeRole := handlers.NewAssumeRoleHandler(jwtSecret)
+	admin := protected.Group("/admin")
+	admin.Use(mw.RequireAdmin)
+	admin.GET("/users", adminUsers.List)
+	admin.POST("/users", adminUsers.Add)
+	admin.PATCH("/users/:username", adminUsers.SetRole)
+	admin.DELETE("/users/:username", adminUsers.Remove)
+	admin.POST("/assume-role", assumeRole.AssumeRole)
 
 	// e.Logger.Fatal(e.Start(":" + port))
 	if err := Serve(e, fmt.Sprintf(":%s", port)); err != nil {

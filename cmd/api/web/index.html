@@ -4,154 +4,52 @@
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Codebase Assistant</title>
-<style>
-  :root {
-    color-scheme: light dark;
-    --bg: #ffffff;
-    --fg: #1a1a1a;
-    --muted: #666666;
-    --border: #e0e0e0;
-    --accent: #2f6fed;
-    --bubble-user: #eef3ff;
-    --bubble-assistant: #f5f5f5;
-    --code-bg: #f0f0f0;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #16181c;
-      --fg: #eaeaea;
-      --muted: #9a9a9a;
-      --border: #2c2f36;
-      --accent: #6d9bff;
-      --bubble-user: #24304a;
-      --bubble-assistant: #232529;
-      --code-bg: #1d1f24;
-    }
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-    background: var(--bg);
-    color: var(--fg);
-    height: 100vh;
-    display: flex;
-    flex-direction: column;
-  }
-  header {
-    padding: 1rem 1.5rem;
-    border-bottom: 1px solid var(--border);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-  }
-  header h1 { font-size: 1rem; font-weight: 600; margin: 0; }
-  #login-view {
-    flex: 1;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-direction: column;
-    gap: 1rem;
-  }
-  #login-view a {
-    background: var(--accent);
-    color: white;
-    text-decoration: none;
-    padding: 0.6rem 1.2rem;
-    border-radius: 6px;
-    font-size: 0.95rem;
-  }
-  #chat-view {
-    flex: 1;
-    display: none;
-    flex-direction: column;
-    max-width: 760px;
-    width: 100%;
-    margin: 0 auto;
-    padding: 1rem 1.5rem;
-    overflow: hidden;
-  }
-  #messages {
-    flex: 1;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column;
-    gap: 0.75rem;
-    padding-bottom: 1rem;
-  }
-  .msg {
-    padding: 0.6rem 0.9rem;
-    border-radius: 10px;
-    max-width: 85%;
-    white-space: pre-wrap;
-    line-height: 1.45;
-    font-size: 0.95rem;
-  }
-  .msg.user { align-self: flex-end; background: var(--bubble-user); }
-  .msg.assistant { align-self: flex-start; background: var(--bubble-assistant); }
-  .msg.error { align-self: flex-start; background: #fde2e2; color: #7a1a1a; }
-  .msg code, .msg pre {
-    background: var(--code-bg);
-    border-radius: 4px;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-    font-size: 0.85em;
-  }
-  .msg pre { padding: 0.6rem; overflow-x: auto; }
-  .citations {
-    margin-top: 0.5rem;
-    display: flex;
-    flex-wrap: wrap;
-    gap: 0.35rem;
-  }
-  .citation {
-    font-size: 0.75rem;
-    color: var(--muted);
-    background: var(--code-bg);
-    border-radius: 4px;
-    padding: 0.15rem 0.4rem;
-    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  }
-  form {
-    display: flex;
-    gap: 0.5rem;
-    border-top: 1px solid var(--border);
-    padding-top: 0.75rem;
-  }
-  textarea {
-    flex: 1;
-    resize: none;
-    padding: 0.6rem 0.75rem;
-    border-radius: 8px;
-    border: 1px solid var(--border);
-    background: var(--bg);
-    color: var(--fg);
-    font-family: inherit;
-    font-size: 0.95rem;
-  }
-  button {
-    padding: 0 1.2rem;
-    border-radius: 8px;
-    border: none;
-    background: var(--accent);
-    color: white;
-    font-size: 0.95rem;
-    cursor: pointer;
-  }
-  button:disabled { opacity: 0.5; cursor: default; }
-  #status { color: var(--muted); font-size: 0.85rem; }
-</style>
+<link rel="stylesheet" href="/style.css" />
 </head>
 <body>
 
 <header>
   <h1>Codebase Assistant</h1>
+  <nav id="tabs" style="display:none;">
+    <button type="button" class="active" id="home-tab-btn">Home</button>
+    <button type="button" id="chat-tab-btn">Chat</button>
+    <button type="button" id="aws-tab-btn">AWS Access</button>
+    <button type="button" id="admin-tab-btn" style="display:none;">Admin</button>
+  </nav>
   <span id="status"></span>
 </header>
 
 <div id="login-view">
   <p>Log in with your GitHub account to ask questions about the codebase.</p>
   <a href="/auth/github">Log in with GitHub</a>
+</div>
+
+<div id="home-view">
+  <div id="profile-card">
+    <img id="profile-avatar" alt="" />
+    <div>
+      <div id="profile-name" class="profile-name"></div>
+      <div class="profile-detail"><span class="field-label">Username</span> <span id="profile-username"></span></div>
+      <div class="profile-detail"><span class="field-label">Email</span> <span id="profile-email"></span></div>
+      <div class="profile-detail"><span class="field-label">Role</span> <span id="profile-role" class="role-badge"></span></div>
+      <div class="profile-detail" id="profile-orgs-row"><span class="field-label">Orgs</span> <span id="profile-orgs"></span></div>
+    </div>
+  </div>
+
+  <div class="home-cards">
+    <button type="button" class="home-card" data-view="chat">
+      <strong>Chat</strong>
+      <span>Ask questions about the codebase — grounded in what's actually indexed, with citations.</span>
+    </button>
+    <button type="button" class="home-card" data-view="aws">
+      <strong>AWS Access</strong>
+      <span>Get a console login or short-lived credentials for the LFS bucket.</span>
+    </button>
+    <button type="button" class="home-card" id="home-admin-card" data-view="admin" style="display:none;">
+      <strong>Admin</strong>
+      <span>Manage who has access and what role they have.</span>
+    </button>
+  </div>
 </div>
 
 <div id="chat-view">
@@ -162,110 +60,64 @@
   </form>
 </div>
 
-<script>
-(function () {
-  var history = []; // {role, content} — trimmed client-side, server trims again as a floor
-  var MAX_HISTORY = 6;
+<div id="aws-view">
+  <div id="aws-error"></div>
 
-  var loginView = document.getElementById("login-view");
-  var chatView = document.getElementById("chat-view");
-  var messagesEl = document.getElementById("messages");
-  var form = document.getElementById("chat-form");
-  var input = document.getElementById("input");
-  var sendBtn = document.getElementById("send");
-  var statusEl = document.getElementById("status");
+  <h2>LFS access key</h2>
+  <p class="hint">A long-lived access key scoped to just the LFS bucket — set it once for git and forget it. You can only have one at a time; if you lose it, get console access below and delete the old one first.</p>
+  <div class="row">
+    <button type="button" id="aws-lfs-btn">Get LFS Access Key</button>
+    <button type="button" id="aws-lfs-delete-btn" class="remove-btn">Delete LFS Access Key</button>
+  </div>
+  <div id="aws-lfs-result" class="reveal-box"></div>
 
-  function escapeHtml(s) {
-    var div = document.createElement("div");
-    div.textContent = s;
-    return div.innerHTML;
-  }
+  <h2>Console access</h2>
+  <p class="hint">One-time console login for browser access to AWS (S3 browsing, CloudWatch, other devops work) — not needed just for git/LFS. Shown once — copy it immediately.</p>
+  <button type="button" id="aws-console-btn">Get AWS Console Access</button>
+  <div id="aws-console-result" class="reveal-box"></div>
 
-  function addMessage(role, text, citations) {
-    var el = document.createElement("div");
-    el.className = "msg " + role;
-    el.innerHTML = escapeHtml(text).replace(/\n/g, "<br>");
+  <h2>Temporary credentials</h2>
+  <p class="hint">Short-lived access/secret keys for ad hoc ops work — nothing long-lived is ever created for this flow.</p>
+  <button type="button" id="aws-sts-btn">Get Temporary AWS Credentials</button>
+  <div id="aws-sts-result" class="reveal-box"></div>
+</div>
 
-    if (citations && citations.length) {
-      var cWrap = document.createElement("div");
-      cWrap.className = "citations";
-      citations.forEach(function (c) {
-        var tag = document.createElement("span");
-        tag.className = "citation";
-        tag.textContent = c.file + ":" + c.startLine + "-" + c.endLine;
-        cWrap.appendChild(tag);
-      });
-      el.appendChild(cWrap);
-    }
+<div id="admin-view">
+  <div id="admin-error"></div>
 
-    messagesEl.appendChild(el);
-    messagesEl.scrollTop = messagesEl.scrollHeight;
-    return el;
-  }
+  <h2>Add user</h2>
+  <form id="add-user-form">
+    <input type="text" id="add-username" placeholder="GitHub username" autocomplete="off" />
+    <select id="add-role">
+      <option value="developer" selected>developer</option>
+      <option value="admin">admin</option>
+    </select>
+    <button type="submit">Add</button>
+  </form>
 
-  form.addEventListener("submit", function (e) {
-    e.preventDefault();
-    var message = input.value.trim();
-    if (!message) return;
+  <h2>Users</h2>
+  <table class="users-table">
+    <thead>
+      <tr><th>Username</th><th>Role</th><th>Added</th><th></th></tr>
+    </thead>
+    <tbody id="users-table-body"></tbody>
+  </table>
 
-    addMessage("user", message);
-    input.value = "";
-    sendBtn.disabled = true;
-    statusEl.textContent = "Thinking…";
+  <h2>Test as a different role</h2>
+  <p class="hint">Mints a token for your own account under a different role; your real session is never touched. Paste it as a <code>session</code> cookie in an incognito window (or use it with <code>curl</code>) to preview what that role sees.</p>
+  <div class="row">
+    <select id="assume-role-duration">
+      <option value="900">15 minutes</option>
+      <option value="3600" selected>1 hour</option>
+      <option value="14400">4 hours</option>
+      <option value="86400">24 hours</option>
+    </select>
+    <button type="button" id="assume-role-btn">Assume Developer Role</button>
+  </div>
+  <div id="assume-role-result" class="reveal-box"></div>
+</div>
 
-    fetch("/api/chat", {
-      method: "POST",
-      credentials: "include",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ message: message, history: history }),
-    })
-      .then(function (res) {
-        if (!res.ok) throw new Error("Request failed (" + res.status + ")");
-        return res.json();
-      })
-      .then(function (data) {
-        addMessage("assistant", data.answer, data.citations);
-        history.push({ role: "user", content: message });
-        history.push({ role: "assistant", content: data.answer });
-        if (history.length > MAX_HISTORY) {
-          history = history.slice(history.length - MAX_HISTORY);
-        }
-      })
-      .catch(function (err) {
-        addMessage("error", "Something went wrong: " + err.message);
-      })
-      .finally(function () {
-        sendBtn.disabled = false;
-        statusEl.textContent = "";
-        input.focus();
-      });
-  });
-
-  input.addEventListener("keydown", function (e) {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      form.requestSubmit();
-    }
-  });
-
-  // Check session on load.
-  fetch("/api/me", { credentials: "include" })
-    .then(function (res) {
-      if (!res.ok) throw new Error("not logged in");
-      return res.json();
-    })
-    .then(function (me) {
-      loginView.style.display = "none";
-      chatView.style.display = "flex";
-      statusEl.textContent = me.username ? "Logged in as " + me.username : "";
-      input.focus();
-    })
-    .catch(function () {
-      loginView.style.display = "flex";
-      chatView.style.display = "none";
-    });
-})();
-</script>
+<script src="/app.js"></script>
 
 </body>
 </html>
