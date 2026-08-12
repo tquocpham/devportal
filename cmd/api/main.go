@@ -21,6 +21,7 @@ import (
 	"github.com/devportal/api/lib/handlers"
 	"github.com/devportal/api/lib/mcp"
 	mw "github.com/devportal/api/lib/middleware"
+	"github.com/devportal/api/lib/repos"
 	"github.com/devportal/api/lib/users"
 	"github.com/devportal/retrieval"
 	"github.com/labstack/echo/v4"
@@ -178,6 +179,14 @@ func main() {
 		logger.Fatalf("allowed_users table not ready; run cmd/api/migrations/migrate.sh via CI/CD first: %v", err)
 	}
 
+	repoStore, err := repos.NewStore(databaseURL)
+	if err != nil {
+		logger.Fatalf("repos DB connection failed: %v", err)
+	}
+	if err := repoStore.CheckSchema(); err != nil {
+		logger.Fatalf("repos table not ready; run cmd/api/migrations/migrate.sh via CI/CD first: %v", err)
+	}
+
 	auth := handlers.NewAuthHandler(
 		githubClientID, githubClientSecret, callbackURL, allowedOrg,
 		jwtSecret, userStore)
@@ -263,6 +272,8 @@ func main() {
 	protected.POST("/chat", chat.Chat)
 	mcpToken := handlers.NewMCPTokenHandler(jwtSecret, mcpTokenDuration)
 	protected.POST("/me/mcp-token", mcpToken.MCPToken)
+	reposHandler := handlers.NewReposHandler(repoStore)
+	protected.GET("/repos", reposHandler.List)
 
 	// AWS self-service (docs/phase-3-aws-access-plan.md).
 	protected.POST("/aws/lfs-access-key", awsHandler.LFSAccessKey)
@@ -271,6 +282,7 @@ func main() {
 	protected.POST("/aws/sts-credentials", awsHandler.STSCredentials)
 
 	adminUsers := handlers.NewAdminUsersHandler(userStore)
+	adminRepos := handlers.NewAdminReposHandler(repoStore)
 	assumeRole := handlers.NewAssumeRoleHandler(jwtSecret)
 	admin := protected.Group("/admin")
 	admin.Use(mw.RequireAdmin)
@@ -279,6 +291,12 @@ func main() {
 	admin.PATCH("/users/:username", adminUsers.SetRole)
 	admin.DELETE("/users/:username", adminUsers.Remove)
 	admin.DELETE("/users/:username/aws-console-access", awsHandler.AdminConsoleAccessDelete)
+	admin.GET("/repos", adminRepos.List)
+	admin.POST("/repos", adminRepos.Create)
+	admin.DELETE("/repos/:id", adminRepos.Delete)
+	admin.GET("/users/:username/repos", adminRepos.ListForUser)
+	admin.POST("/users/:username/repos", adminRepos.Grant)
+	admin.DELETE("/users/:username/repos/:repoId", adminRepos.Revoke)
 	admin.POST("/assume-role", assumeRole.AssumeRole)
 
 	// e.Logger.Fatal(e.Start(":" + port))

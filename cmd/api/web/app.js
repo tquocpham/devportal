@@ -1,6 +1,7 @@
 (function () {
   var history = []; // {role, content} trimmed client-side, server trims again as a floor
   var MAX_HISTORY = 6;
+  var repoCatalog = []; // populated by loadRepoCatalog, read by each user row's grant dropdown
 
   var loginView = document.getElementById("login-view");
   var chatView = document.getElementById("chat-view");
@@ -20,6 +21,10 @@
   var addUserForm = document.getElementById("add-user-form");
   var addUsernameInput = document.getElementById("add-username");
   var addRoleSelect = document.getElementById("add-role");
+  var reposTableBody = document.getElementById("repos-table-body");
+  var addRepoForm = document.getElementById("add-repo-form");
+  var addRepoNameInput = document.getElementById("add-repo-name");
+  var addRepoUrlInput = document.getElementById("add-repo-url");
   var assumeRoleBtn = document.getElementById("assume-role-btn");
   var assumeRoleResult = document.getElementById("assume-role-result");
   var assumeRoleDuration = document.getElementById("assume-role-duration");
@@ -34,6 +39,8 @@
   var profileOrgsEl = document.getElementById("profile-orgs");
   var homeTabBtn = document.getElementById("home-tab-btn");
   var homeAdminCard = document.getElementById("home-admin-card");
+  var reposSection = document.getElementById("repos-section");
+  var reposList = document.getElementById("repos-list");
   var awsView = document.getElementById("aws-view");
   var awsTabBtn = document.getElementById("aws-tab-btn");
   var awsErrorEl = document.getElementById("aws-error");
@@ -136,7 +143,7 @@
     awsTabBtn.classList.toggle("active", name === "aws");
     mcpTabBtn.classList.toggle("active", name === "mcp");
     adminTabBtn.classList.toggle("active", name === "admin");
-    if (name === "admin") loadUsers();
+    if (name === "admin") loadRepoCatalog().then(loadUsers);
     if (name === "chat") input.focus();
   }
 
@@ -202,6 +209,13 @@
       addedTd.textContent = u.addedAt ? new Date(u.addedAt).toLocaleDateString() : "";
       tr.appendChild(addedTd);
 
+      var reposTd = document.createElement("td");
+      var reposCell = document.createElement("div");
+      reposCell.className = "user-repos-cell";
+      reposTd.appendChild(reposCell);
+      tr.appendChild(reposTd);
+      loadUserRepoCell(u.username, reposCell);
+
       var actionsTd = document.createElement("td");
       var actionsRow = document.createElement("div");
       actionsRow.className = "row";
@@ -225,6 +239,171 @@
 
       usersTableBody.appendChild(tr);
     });
+  }
+
+  // Repo catalog (admin-managed list of {id, name, url}) is loaded before
+  // loadUsers on every admin-tab show, so repoCatalog is always populated
+  // by the time each row's grant dropdown is built.
+  function loadRepoCatalog() {
+    return fetch("/api/v1/admin/repos", { credentials: "include" })
+      .then(function (res) {
+        if (!res.ok) return apiErrorMessage(res, "Failed to load repo catalog").then(function (m) { throw new Error(m); });
+        return res.json();
+      })
+      .then(function (list) {
+        repoCatalog = list || [];
+        renderRepoCatalog(repoCatalog);
+      })
+      .catch(function (err) { showAdminError(err.message); });
+  }
+
+  function renderRepoCatalog(list) {
+    reposTableBody.innerHTML = "";
+    (list || []).forEach(function (r) {
+      var tr = document.createElement("tr");
+
+      var nameTd = document.createElement("td");
+      nameTd.textContent = r.name;
+      tr.appendChild(nameTd);
+
+      var urlTd = document.createElement("td");
+      var a = document.createElement("a");
+      a.href = r.url;
+      a.textContent = r.url;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      urlTd.appendChild(a);
+      tr.appendChild(urlTd);
+
+      var actionsTd = document.createElement("td");
+      var deleteBtn = document.createElement("button");
+      deleteBtn.type = "button";
+      deleteBtn.className = "remove-btn";
+      deleteBtn.textContent = "Delete";
+      deleteBtn.addEventListener("click", function () { deleteRepo(r.id); });
+      actionsTd.appendChild(deleteBtn);
+      tr.appendChild(actionsTd);
+
+      reposTableBody.appendChild(tr);
+    });
+  }
+
+  function deleteRepo(id) {
+    if (!confirm("Delete this repo from the catalog? This revokes it from every user who currently has it.")) return;
+    showAdminError("");
+    fetch("/api/v1/admin/repos/" + encodeURIComponent(id), { method: "DELETE", credentials: "include" })
+      .then(function (res) {
+        if (!res.ok && res.status !== 204) return apiErrorMessage(res, "Failed to delete repo").then(function (m) { throw new Error(m); });
+      })
+      .catch(function (err) { showAdminError(err.message); })
+      // Deleting a catalog repo cascades server-side to revoke it from
+      // every user who had it, so the users table's grant tags need a
+      // refresh too, not just the catalog table.
+      .finally(function () { loadRepoCatalog().then(loadUsers); });
+  }
+
+  addRepoForm.addEventListener("submit", function (e) {
+    e.preventDefault();
+    var name = addRepoNameInput.value.trim();
+    var url = addRepoUrlInput.value.trim();
+    if (!name || !url) return;
+    showAdminError("");
+    fetch("/api/v1/admin/repos", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: name, url: url }),
+    })
+      .then(function (res) {
+        if (!res.ok) return apiErrorMessage(res, "Failed to add repo").then(function (m) { throw new Error(m); });
+        addRepoNameInput.value = "";
+        addRepoUrlInput.value = "";
+      })
+      .catch(function (err) { showAdminError(err.message); })
+      .finally(loadRepoCatalog);
+  });
+
+  // Per-user grant/revoke, rendered inside each users-table row's "Repos"
+  // cell: removable tags for what they have, a dropdown + button for
+  // whatever's in the catalog but not yet granted.
+  function loadUserRepoCell(username, container) {
+    fetch("/api/v1/admin/users/" + encodeURIComponent(username) + "/repos", { credentials: "include" })
+      .then(function (res) {
+        if (!res.ok) throw new Error("failed to load");
+        return res.json();
+      })
+      .then(function (grantedRepos) { renderUserRepoCell(username, container, grantedRepos || []); })
+      .catch(function () { container.textContent = "—"; });
+  }
+
+  function renderUserRepoCell(username, container, grantedRepos) {
+    container.innerHTML = "";
+
+    var tagsWrap = document.createElement("div");
+    tagsWrap.className = "user-repo-tags";
+    grantedRepos.forEach(function (r) {
+      var tag = document.createElement("span");
+      tag.className = "citation";
+      tag.textContent = r.name;
+
+      var x = document.createElement("button");
+      x.type = "button";
+      x.className = "tag-remove-btn";
+      x.textContent = "×";
+      x.title = "Revoke";
+      x.addEventListener("click", function () {
+        fetch("/api/v1/admin/users/" + encodeURIComponent(username) + "/repos/" + encodeURIComponent(r.id), {
+          method: "DELETE",
+          credentials: "include",
+        })
+          .then(function (res) {
+            if (!res.ok && res.status !== 204) return apiErrorMessage(res, "Failed to revoke repo").then(function (m) { throw new Error(m); });
+          })
+          .catch(function (err) { showAdminError(err.message); })
+          .finally(function () { loadUserRepoCell(username, container); });
+      });
+      tag.appendChild(x);
+      tagsWrap.appendChild(tag);
+    });
+    container.appendChild(tagsWrap);
+
+    var grantedIds = {};
+    grantedRepos.forEach(function (r) { grantedIds[r.id] = true; });
+    var ungranted = repoCatalog.filter(function (r) { return !grantedIds[r.id]; });
+
+    if (ungranted.length) {
+      var grantRow = document.createElement("div");
+      grantRow.className = "row";
+
+      var select = document.createElement("select");
+      ungranted.forEach(function (r) {
+        var opt = document.createElement("option");
+        opt.value = r.id;
+        opt.textContent = r.name;
+        select.appendChild(opt);
+      });
+
+      var grantBtn = document.createElement("button");
+      grantBtn.type = "button";
+      grantBtn.textContent = "Grant";
+      grantBtn.addEventListener("click", function () {
+        fetch("/api/v1/admin/users/" + encodeURIComponent(username) + "/repos", {
+          method: "POST",
+          credentials: "include",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ repoId: parseInt(select.value, 10) }),
+        })
+          .then(function (res) {
+            if (!res.ok) return apiErrorMessage(res, "Failed to grant repo").then(function (m) { throw new Error(m); });
+          })
+          .catch(function (err) { showAdminError(err.message); })
+          .finally(function () { loadUserRepoCell(username, container); });
+      });
+
+      grantRow.appendChild(select);
+      grantRow.appendChild(grantBtn);
+      container.appendChild(grantRow);
+    }
   }
 
   function changeRole(username, role) {
@@ -656,6 +835,35 @@
     }
   }
 
+  function loadRepos() {
+    fetch("/api/v1/repos", { credentials: "include" })
+      .then(function (res) {
+        if (!res.ok) throw new Error("failed to load repos");
+        return res.json();
+      })
+      .then(renderRepos)
+      .catch(function () { reposSection.style.display = "none"; });
+  }
+
+  function renderRepos(repoList) {
+    reposList.innerHTML = "";
+    if (!repoList || !repoList.length) {
+      reposSection.style.display = "none";
+      return;
+    }
+    reposSection.style.display = "";
+    repoList.forEach(function (repo) {
+      var li = document.createElement("li");
+      var a = document.createElement("a");
+      a.href = repo.url;
+      a.textContent = repo.name;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      li.appendChild(a);
+      reposList.appendChild(li);
+    });
+  }
+
   // Check session on load.
   fetch("/api/v1/me", { credentials: "include" })
     .then(function (res) {
@@ -670,6 +878,7 @@
         homeAdminCard.style.display = "";
       }
       renderProfile(me);
+      loadRepos();
       showView("home");
       statusEl.textContent = me.username ? "Logged in as " + me.username : "";
     })

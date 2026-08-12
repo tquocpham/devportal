@@ -59,6 +59,11 @@
       <span>Manage who has access and what role they have.</span>
     </button>
   </div>
+
+  <div id="repos-section" style="display:none;">
+    <h2>Repositories</h2>
+    <ul id="repos-list" class="repos-list"></ul>
+  </div>
 </div>
 
 <div id="chat-view">
@@ -124,10 +129,24 @@
     <button type="submit">Add</button>
   </form>
 
+  <h2>Repositories</h2>
+  <p class="hint">The catalog repos can be granted from below. Adding one here doesn't give anyone access to it yet, that's a separate grant per user.</p>
+  <form id="add-repo-form">
+    <input type="text" id="add-repo-name" placeholder="Repo name" autocomplete="off" />
+    <input type="text" id="add-repo-url" placeholder="https://github.com/org/repo" autocomplete="off" />
+    <button type="submit">Add</button>
+  </form>
+  <table class="users-table">
+    <thead>
+      <tr><th>Name</th><th>URL</th><th></th></tr>
+    </thead>
+    <tbody id="repos-table-body"></tbody>
+  </table>
+
   <h2>Users</h2>
   <table class="users-table">
     <thead>
-      <tr><th>Username</th><th>Role</th><th>Added</th><th></th></tr>
+      <tr><th>Username</th><th>Role</th><th>Added</th><th>Repos</th><th></th></tr>
     </thead>
     <tbody id="users-table-body"></tbody>
   </table>
