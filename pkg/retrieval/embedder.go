@@ -12,7 +12,7 @@ import (
 
 // Anthropic doesn't expose a dedicated embedding endpoint, so embeddings
 // come from a separate provider. Embedder abstracts over that provider so
-// it can be swapped — but note the data isn't portable across providers:
+// it can be swapped but note the data isn't portable across providers:
 // different models produce incompatible vector spaces, and the pgvector
 // column has a fixed dimension (see store.go), so switching providers
 // always means re-running a full index, not just changing a setting.

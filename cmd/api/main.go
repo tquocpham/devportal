@@ -13,6 +13,10 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/aws/aws-sdk-go-v2/credentials"
+	"github.com/aws/aws-sdk-go-v2/service/iam"
+	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/devportal/api/lib/handlers"
 	mw "github.com/devportal/api/lib/middleware"
 	"github.com/devportal/api/lib/users"
@@ -162,6 +166,45 @@ func main() {
 	anthropicClient := anthropic.NewClient(option.WithAPIKey(anthropicKey))
 	chat := handlers.NewChatHandler(store, embedder, anthropicClient, chatCfg)
 
+	// AWS self-service (docs/phase-3-aws-access-plan.md). The provisioner's
+	// own credentials, not per-user; see docs/aws-one-time-setup.md for the
+	// IAM setup this depends on.
+	ctx := context.Background()
+	awsCfg, err := awsconfig.LoadDefaultConfig(ctx,
+		awsconfig.WithRegion(mustGet("aws_region")),
+		awsconfig.WithCredentialsProvider(credentials.NewStaticCredentialsProvider(
+			mustGet("aws_access_key_id"), mustGet("aws_secret_access_key"), "")),
+	)
+	if err != nil {
+		logger.Fatalf("AWS config failed: %v", err)
+	}
+	iamClient := iam.NewFromConfig(awsCfg)
+	stsClient := sts.NewFromConfig(awsCfg)
+
+	identity, err := stsClient.GetCallerIdentity(ctx, &sts.GetCallerIdentityInput{})
+	if err != nil {
+		logger.Fatalf("AWS credentials check failed (sts:GetCallerIdentity): %v", err)
+	}
+
+	awsHandlerCfg := handlers.DefaultAWSConfig()
+	awsHandlerCfg.AccountID = *identity.Account
+	awsHandlerCfg.Region = mustGet("aws_region")
+	awsHandlerCfg.Bucket = mustGet("aws_lfs_bucket")
+	awsHandlerCfg.STSRoleARN = mustGet("aws_sts_role_arn")
+	if v := viper.GetInt("aws_sts_max_session_duration_seconds"); v > 0 {
+		awsHandlerCfg.STSMaxSessionDurationSeconds = int32(v)
+	}
+	if v := get("aws_iam_username_prefix", ""); v != "" {
+		awsHandlerCfg.UsernamePrefix = v
+	}
+	if v := get("aws_lfs_contributor_policy_name", ""); v != "" {
+		awsHandlerCfg.ContributorPolicyName = v
+	}
+	if v := get("aws_self_manage_policy_name", ""); v != "" {
+		awsHandlerCfg.SelfManagePolicyName = v
+	}
+	awsHandler := handlers.NewAWSHandler(iamClient, stsClient, awsHandlerCfg)
+
 	e.GET("/auth/github", auth.Login)
 	e.GET("/auth/callback", auth.Callback)
 	webAssets := echo.MustSubFS(webFS, "web")
@@ -178,12 +221,11 @@ func main() {
 	protected.GET("/me", handlers.Me)
 	protected.POST("/chat", chat.Chat)
 
-	// Stubs for Phase 3 (docs/phase-3-aws-access-plan.md): real routes,
-	// not yet real AWS calls. See handlers.AWSLFSAccessKeyStub.
-	protected.POST("/aws/lfs-access-key", handlers.AWSLFSAccessKeyStub)
-	protected.DELETE("/aws/lfs-access-key", handlers.AWSLFSAccessKeyDeleteStub)
-	protected.POST("/aws/console-access", handlers.AWSConsoleAccessStub)
-	protected.POST("/aws/sts-credentials", handlers.AWSSTSCredentialsStub)
+	// AWS self-service (docs/phase-3-aws-access-plan.md).
+	protected.POST("/aws/lfs-access-key", awsHandler.LFSAccessKey)
+	protected.DELETE("/aws/lfs-access-key", awsHandler.LFSAccessKeyDelete)
+	protected.POST("/aws/console-access", awsHandler.ConsoleAccess)
+	protected.POST("/aws/sts-credentials", awsHandler.STSCredentials)
 
 	adminUsers := handlers.NewAdminUsersHandler(userStore)
 	assumeRole := handlers.NewAssumeRoleHandler(jwtSecret)
@@ -193,6 +235,7 @@ func main() {
 	admin.POST("/users", adminUsers.Add)
 	admin.PATCH("/users/:username", adminUsers.SetRole)
 	admin.DELETE("/users/:username", adminUsers.Remove)
+	admin.DELETE("/users/:username/aws-console-access", awsHandler.AdminConsoleAccessDelete)
 	admin.POST("/assume-role", assumeRole.AssumeRole)
 
 	// e.Logger.Fatal(e.Start(":" + port))

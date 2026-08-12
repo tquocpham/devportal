@@ -94,14 +94,14 @@ func main() {
 		// Embed and store each chunk
 		for _, chunk := range chunks {
 			// Prepend the file path so chunks are findable by filename, not
-			// just by how similar their content sounds to the query — e.g.
+			// just by how similar their content sounds to the query. e.g.
 			// asking about "Config/DefaultEngine.ini" by name should match
 			// its chunks even though the file's content never mentions its
 			// own filename.
 			embedding, tokensUsed, err := embedder.Embed(chunk.RelPath + "\n\n" + chunk.Content)
 			if err != nil {
 				if errors.Is(err, retrieval.ErrRateLimited) {
-					log.Fatalf("  Embedding rate limited at %s:%d — stopping (indexed %d chunks, %d tokens before this): %v",
+					log.Fatalf("  Embedding rate limited at %s:%d. Stopping (indexed %d chunks, %d tokens before this): %v",
 						file.RelPath, chunk.StartLine, totalChunks, totalTokens, err)
 				}
 				log.Printf("  Embedding failed for chunk at line %d: %v", chunk.StartLine, err)
@@ -117,7 +117,7 @@ func main() {
 			totalChunks++
 
 			if cfg.MaxEmbeddingTokens > 0 && totalTokens >= cfg.MaxEmbeddingTokens {
-				log.Fatalf("  Reached embedding token budget (%d/%d tokens) at %s:%d — stopping with %d chunks indexed. "+
+				log.Fatalf("  Reached embedding token budget (%d/%d tokens) at %s:%d. Stopping with %d chunks indexed. "+
 					"Raise MAX_EMBEDDING_TOKENS if you're sure you want to keep going.",
 					totalTokens, cfg.MaxEmbeddingTokens, file.RelPath, chunk.StartLine, totalChunks)
 			}

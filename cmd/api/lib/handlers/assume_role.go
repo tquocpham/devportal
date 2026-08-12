@@ -37,7 +37,7 @@ type assumeRoleRequest struct {
 // AssumeRole handles POST /api/v1/admin/assume-role (admin-only). Mints a
 // short-lived token for the CALLER'S OWN username under a different role,
 // so an admin can see exactly what a developer session can and can't do.
-// Does not touch the real "session" cookie — the admin's actual login is
+// Does not touch the real "session" cookie. The admin's actual login is
 // untouched the whole time, so there's no separate "switch back" step,
 // just stop using the minted token.
 func (h *AssumeRoleHandler) AssumeRole(c echo.Context) error {

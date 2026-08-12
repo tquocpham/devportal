@@ -1,10 +1,11 @@
 (function () {
-  var history = []; // {role, content} — trimmed client-side, server trims again as a floor
+  var history = []; // {role, content} trimmed client-side, server trims again as a floor
   var MAX_HISTORY = 6;
 
   var loginView = document.getElementById("login-view");
   var chatView = document.getElementById("chat-view");
   var messagesEl = document.getElementById("messages");
+  var chatStatusEl = document.getElementById("chat-status");
   var form = document.getElementById("chat-form");
   var input = document.getElementById("input");
   var sendBtn = document.getElementById("send");
@@ -80,7 +81,7 @@
     addMessage("user", message);
     input.value = "";
     sendBtn.disabled = true;
-    statusEl.textContent = "Thinking…";
+    chatStatusEl.textContent = "Thinking…";
 
     fetch("/api/v1/chat", {
       method: "POST",
@@ -105,7 +106,7 @@
       })
       .finally(function () {
         sendBtn.disabled = false;
-        statusEl.textContent = "";
+        chatStatusEl.textContent = "";
         input.focus();
       });
   });
@@ -192,12 +193,24 @@
       tr.appendChild(addedTd);
 
       var actionsTd = document.createElement("td");
+      var actionsRow = document.createElement("div");
+      actionsRow.className = "row";
+
       var removeBtn = document.createElement("button");
       removeBtn.type = "button";
       removeBtn.className = "remove-btn";
       removeBtn.textContent = "Remove";
       removeBtn.addEventListener("click", function () { removeUser(u.username); });
-      actionsTd.appendChild(removeBtn);
+      actionsRow.appendChild(removeBtn);
+
+      var removeConsoleBtn = document.createElement("button");
+      removeConsoleBtn.type = "button";
+      removeConsoleBtn.className = "remove-btn";
+      removeConsoleBtn.textContent = "Remove Console Access";
+      removeConsoleBtn.addEventListener("click", function () { removeConsoleAccess(u.username); });
+      actionsRow.appendChild(removeConsoleBtn);
+
+      actionsTd.appendChild(actionsRow);
       tr.appendChild(actionsTd);
 
       usersTableBody.appendChild(tr);
@@ -231,6 +244,19 @@
       })
       .catch(function (err) { showAdminError(err.message); })
       .finally(loadUsers);
+  }
+
+  function removeConsoleAccess(username) {
+    if (!confirm("Remove " + username + "'s AWS console access? They'll need to request it again to get back in.")) return;
+    showAdminError("");
+    fetch("/api/v1/admin/users/" + encodeURIComponent(username) + "/aws-console-access", {
+      method: "DELETE",
+      credentials: "include",
+    })
+      .then(function (res) {
+        if (!res.ok) return apiErrorMessage(res, "Failed to remove console access").then(function (m) { throw new Error(m); });
+      })
+      .catch(function (err) { showAdminError(err.message); });
   }
 
   addUserForm.addEventListener("submit", function (e) {
@@ -276,14 +302,14 @@
 
     var expiry = document.createElement("div");
     expiry.className = "field-label";
-    expiry.textContent = "Role: " + data.role + " — expires " + new Date(data.expiresAt).toLocaleTimeString();
+    expiry.textContent = "Role: " + data.role + " expires " + new Date(data.expiresAt).toLocaleTimeString();
     assumeRoleResult.appendChild(expiry);
 
     copyableRow(assumeRoleResult, "Token", data.token);
   }
 
   // Builds one labeled, read-only, copy-button field row inside a reveal
-  // box — shared by the assume-role token and the AWS console/STS results
+  // box. Shared by the assume-role token and the AWS console/STS results
   // below, since all three are "show a secret once, let them copy it."
   function copyableRow(container, label, value) {
     var wrap = document.createElement("div");
@@ -327,6 +353,21 @@
     container.appendChild(wrap);
   }
 
+  // Shared "Copy block" button for a multi-line export snippet used by
+  // both the LFS next-steps block and the STS export block below.
+  function copyBlockButton(text) {
+    var btn = document.createElement("button");
+    btn.type = "button";
+    btn.textContent = "Copy block";
+    btn.addEventListener("click", function () {
+      navigator.clipboard.writeText(text).then(function () {
+        btn.textContent = "Copied!";
+        setTimeout(function () { btn.textContent = "Copy block"; }, 1500);
+      });
+    });
+    return btn;
+  }
+
   function showAwsError(msg) {
     awsErrorEl.textContent = msg;
     awsErrorEl.style.display = msg ? "block" : "none";
@@ -359,10 +400,80 @@
 
     var note = document.createElement("div");
     note.className = "field-label";
-    note.textContent = "Shown once — save this now.";
+    note.textContent = "Shown once. Save this now.";
     awsLfsResult.appendChild(note);
     copyableRow(awsLfsResult, "AWS_ACCESS_KEY_ID", data.accessKeyId);
     copyableRow(awsLfsResult, "AWS_SECRET_ACCESS_KEY", data.secretAccessKey);
+    renderLfsNextSteps(awsLfsResult, data);
+  }
+
+  // Builds the "set this up on your machine" block below a freshly issued
+  // LFS key: the same env vars lfs-s3 needs, pre-filled with the real key,
+  // bucket, and region, since making the user copy these by hand into the
+  // right shell profile file is the actual point of friction here.
+  function renderLfsNextSteps(container, data) {
+    var endpoint = "https://s3." + data.region + ".amazonaws.com";
+    var envLines = [
+      "export AWS_ACCESS_KEY_ID=" + data.accessKeyId,
+      "export AWS_SECRET_ACCESS_KEY=" + data.secretAccessKey,
+      "export AWS_REGION=" + data.region,
+      "export S3_BUCKET=" + data.bucket,
+      "export AWS_S3_ENDPOINT=" + endpoint,
+    ];
+    var envBlock = envLines.join("\n");
+
+    var wrap = document.createElement("div");
+    wrap.className = "next-steps";
+
+    var heading = document.createElement("div");
+    heading.className = "field-label";
+    heading.textContent = "Next: set these as environment variables so lfs-s3 can find them";
+    wrap.appendChild(heading);
+
+    var body = document.createElement("div");
+    body.className = "next-steps-body";
+    wrap.appendChild(body);
+
+    var menu = document.createElement("div");
+    menu.className = "next-steps-menu";
+    body.appendChild(menu);
+
+    var content = document.createElement("div");
+    content.className = "next-steps-content";
+    body.appendChild(content);
+
+    var profileHint = document.createElement("p");
+    profileHint.className = "hint";
+    content.appendChild(profileHint);
+
+    var pre = document.createElement("pre");
+    var code = document.createElement("code");
+    code.textContent = envBlock;
+    pre.appendChild(code);
+    content.appendChild(pre);
+
+    content.appendChild(copyBlockButton(envBlock));
+
+    var profiles = {
+      "Windows (Git Bash)": "Open Git Bash, run: notepad ~/.bash_profile, paste the lines above in, save, then run: source ~/.bash_profile to apply it to the current window.",
+      "Mac / Linux": "Add the lines above to your shell profile (~/.zshrc, or ~/.bash_profile / ~/.bashrc if you use bash), then run: source ~/.zshrc (or whichever file you edited).",
+    };
+    var menuButtons = [];
+    function selectProfile(name) {
+      profileHint.textContent = profiles[name];
+      menuButtons.forEach(function (b) { b.classList.toggle("active", b.textContent === name); });
+    }
+    Object.keys(profiles).forEach(function (name) {
+      var btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = name;
+      btn.addEventListener("click", function () { selectProfile(name); });
+      menu.appendChild(btn);
+      menuButtons.push(btn);
+    });
+    selectProfile("Windows (Git Bash)");
+
+    container.appendChild(wrap);
   }
 
   awsLfsDeleteBtn.addEventListener("click", function () {
@@ -399,14 +510,14 @@
     if (data.alreadyExisted) {
       var note = document.createElement("div");
       note.className = "field-label";
-      note.textContent = "You already have console access — use \"forgot password\" on the AWS sign-in page if you need a reset.";
+      note.textContent = "You already have console access. Use \"forgot password\" on the AWS sign-in page if you need a reset.";
       awsConsoleResult.appendChild(note);
       return;
     }
 
     var note = document.createElement("div");
     note.className = "field-label";
-    note.textContent = "Shown once — save this now.";
+    note.textContent = "Shown once. Save this now.";
     awsConsoleResult.appendChild(note);
     copyableRow(awsConsoleResult, "Console sign-in URL", data.consoleSignInURL);
     copyableRow(awsConsoleResult, "Username", data.username);
@@ -444,13 +555,19 @@
     copyableRow(awsStsResult, "AWS_SECRET_ACCESS_KEY", data.secretAccessKey);
     copyableRow(awsStsResult, "AWS_SESSION_TOKEN", data.sessionToken);
 
-    var exportBlock = document.createElement("pre");
-    exportBlock.style.cssText = "font-size:0.75rem; overflow-x:auto; background:var(--bg); padding:0.5rem; border-radius:6px;";
-    exportBlock.textContent =
-      "export AWS_ACCESS_KEY_ID=" + data.accessKeyId + "\n" +
+    var exportBlock = "export AWS_ACCESS_KEY_ID=" + data.accessKeyId + "\n" +
       "export AWS_SECRET_ACCESS_KEY=" + data.secretAccessKey + "\n" +
       "export AWS_SESSION_TOKEN=" + data.sessionToken;
-    awsStsResult.appendChild(exportBlock);
+
+    var wrap = document.createElement("div");
+    wrap.className = "next-steps";
+    var pre = document.createElement("pre");
+    var code = document.createElement("code");
+    code.textContent = exportBlock;
+    pre.appendChild(code);
+    wrap.appendChild(pre);
+    wrap.appendChild(copyBlockButton(exportBlock));
+    awsStsResult.appendChild(wrap);
   }
 
   function renderProfile(me) {

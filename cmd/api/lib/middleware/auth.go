@@ -31,7 +31,7 @@ func RequireAuth(jwtSecret string) echo.MiddlewareFunc {
 	}
 }
 
-// RequireAdmin must run after RequireAuth — it reads the claims RequireAuth
+// RequireAdmin must run after RequireAuth. It reads the claims RequireAuth
 // already set and requires the "admin" role.
 func RequireAdmin(next echo.HandlerFunc) echo.HandlerFunc {
 	return func(c echo.Context) error {

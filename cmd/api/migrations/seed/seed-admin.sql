@@ -1,6 +1,6 @@
 -- One-time bootstrap: grants the first admin access so someone can log in
 -- and start granting/revoking everyone else. Run once per environment,
--- separately from migrations/migrate.sh — schema setup and admin access are
+-- separately from migrations/migrate.sh schema setup and admin access are
 -- different CI/CD processes (see cmd/api/README.md). Lives in this
 -- seed/ subdirectory specifically so migrate.sh's flat `*.sql` glob over its
 -- own directory doesn't pick it up and re-run it on every schema change.

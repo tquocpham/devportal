@@ -64,3 +64,10 @@ http://old-macbook.tailXXXXX.ts.net:3000
 ```
 
 Should show the login page. Log in, confirm the chat works and citations look right. `docker compose logs -f api` for anything that goes wrong.
+
+## AWS cleanup (once real users are logging in)
+
+Two things from [`docs/aws-one-time-setup.md`](aws-one-time-setup.md) that can't be closed out until this is actually deployed and the team is using it:
+
+- **Deactivate the root AWS access key** used while setting this up locally, now that `devportal-aws-provisioner`'s own scoped key is what `cmd/api` actually runs on. Deactivate first (not delete) so there's a quick way back if something unexpected still depends on it; delete it once you're confident nothing does.
+- **Retire `NEW_LFS_USER.sh`** once Flow A1/A2 have been exercised by real teammates logging in through this deployment, not just by you during local testing (`docs/aws-one-time-setup.md` step 6).

@@ -61,7 +61,7 @@ func (s *Store) Migrate() error {
 	return err
 }
 
-// CheckReady fails fast if code_chunks hasn't been created yet — used by
+// CheckReady fails fast if code_chunks hasn't been created yet used by
 // cmd/api at startup so a service pointed at an un-migrated/un-indexed
 // database fails loudly instead of erroring on the first chat request.
 func (s *Store) CheckReady() error {

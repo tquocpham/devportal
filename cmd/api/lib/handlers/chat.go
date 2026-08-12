@@ -18,7 +18,7 @@ programmers) understand and write code for this Unreal project. Explain
 plainly, avoid unnecessary jargon, and always cite the file and line range
 you're drawing from.
 
-You have a search_codebase tool — use it to look things up, and call it more
+You have a search_codebase tool. Use it to look things up. Call it more
 than once if the first search doesn't settle the question. In particular:
   - Config and build files (e.g. DefaultEngine.ini, the .uproject file) are
     the source of truth for what's actually active in the project. Code
@@ -46,7 +46,7 @@ type ChatConfig struct {
 
 func DefaultChatConfig() ChatConfig {
 	return ChatConfig{
-		Model:         anthropic.ModelClaudeSonnet5, // cost-conscious choice — see docs/phase-2-chat-api-plan.md
+		Model:         anthropic.ModelClaudeSonnet5, // cost-conscious choice. See docs/phase-2-chat-api-plan.md
 		MaxTokens:     2048,
 		TopK:          6,
 		MaxHistoryLen: 6,
@@ -91,10 +91,10 @@ type chatResponse struct {
 	Citations []citation `json:"citations"`
 }
 
-// searchInput is the schema for the search_codebase tool — reflected into a
+// searchInput is the schema for the search_codebase tool, reflected into a
 // JSON schema by toolrunner.NewBetaToolFromJSONSchema via the jsonschema tags.
 type searchInput struct {
-	Query string `json:"query" jsonschema:"required,description=A focused search query — e.g. a filename\\, class name\\, or specific concept to look up in the indexed codebase."`
+	Query string `json:"query" jsonschema:"required,description=A focused search query. e.g. a filename\\, class name\\, or specific concept to look up in the indexed codebase."`
 }
 
 // Chat handles POST /api/v1/chat (registered under the `protected` route group
@@ -122,7 +122,7 @@ func (h *ChatHandler) Chat(c echo.Context) error {
 
 	searchTool, err := toolrunner.NewBetaToolFromJSONSchema[searchInput](
 		"search_codebase",
-		"Search the indexed codebase (source + config files) for content relevant to a query. Returns the closest-matching chunks with their file paths and line ranges. Call this as many times as you need — e.g. search again with a different, more specific query if the first result doesn't settle the question.",
+		"Search the indexed codebase (source + config files) for content relevant to a query. Returns the closest-matching chunks with their file paths and line ranges. Call this as many times as you need. e.g. search again with a different, more specific query if the first result doesn't settle the question.",
 		func(ctx context.Context, in searchInput) (anthropic.BetaToolResultBlockParamContentUnion, error) {
 			vec, _, err := h.embedder.EmbedQuery(in.Query)
 			if err != nil {
@@ -195,7 +195,7 @@ func (h *ChatHandler) Chat(c echo.Context) error {
 
 // buildMessages converts trimmed history plus the new question into the
 // []anthropic.BetaMessageParam the tool runner expects. Retrieved context no
-// longer gets pre-fetched and injected here — the model pulls it itself via
+// longer gets pre-fetched and injected here. The model pulls it itself via
 // the search_codebase tool, as many times as it needs.
 func buildMessages(history []chatMessage, question string) []anthropic.BetaMessageParam {
 	messages := make([]anthropic.BetaMessageParam, 0, len(history)+1)

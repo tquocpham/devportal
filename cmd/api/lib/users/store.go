@@ -1,6 +1,6 @@
 // Package users backs the login allowlist with Postgres instead of a
 // hardcoded slice in main.go. Schema setup and the initial admin bootstrap
-// are raw-SQL operations run from CI/CD (see cmd/api/README.md) — this
+// are raw-SQL operations run from CI/CD (see cmd/api/README.md). This
 // package never migrates or seeds anything itself, and checks the schema
 // exists at startup rather than creating it. Ongoing user management (list,
 // grant, change role, revoke) has two paths: the raw-SQL commands in the
@@ -15,7 +15,7 @@ import (
 	"github.com/lib/pq"
 )
 
-// Role is a closed set — enforced in Postgres too, via a CHECK constraint
+// Role is a closed set enforced in Postgres too, via a CHECK constraint
 // (see migrations/0002_add_role_to_allowed_users.sql).
 type Role string
 
@@ -68,7 +68,7 @@ func (s *Store) CheckSchema() error {
 }
 
 // Lookup reports whether username is allowed to log in and, if so, their
-// role. Fails closed: a username with no row means allowed=false — an
+// role. Fails closed: a username with no row means allowed=false. An
 // unseeded allowlist should never mean open access. role is meaningless
 // when allowed is false. See cmd/api/migrations/seed/seed-admin.sql for
 // granting the first (admin) user.
@@ -159,7 +159,7 @@ func (s *Store) Remove(username string) error {
 	return checkAffected(res)
 }
 
-// isLastAdmin reports whether username is currently the only admin — i.e.
+// isLastAdmin reports whether username is currently the only admin i.e.
 // whether removing or demoting them would leave zero admins able to manage
 // access at all.
 func (s *Store) isLastAdmin(username string) (bool, error) {

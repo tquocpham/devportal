@@ -28,7 +28,7 @@ type Config struct {
 	OpenAIKey string
 
 	// Stop indexing once cumulative embedding tokens for this run reach
-	// this many. 0 means unlimited. This only guards a single run — it
+	// this many. 0 means unlimited. This only guards a single run. It
 	// does not track usage across separate runs within the same billing
 	// period.
 	MaxEmbeddingTokens int
@@ -64,7 +64,7 @@ func LoadConfig() Config {
 		DatabaseURL:       dbURL,
 		EmbeddingProvider: provider,
 		ProjectPath:       projectPath,
-		// Index C++, header, C#, and config files — adjust as needed.
+		// Index C++, header, C#, and config files. Adjust as needed.
 		// .uasset is Unreal's binary asset format; don't index it as text.
 		Extensions: []string{".cpp", ".h", ".cs", ".ini"},
 	}

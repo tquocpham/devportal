@@ -8,6 +8,8 @@
 </head>
 <body>
 
+<div id="app-shell">
+
 <header>
   <h1>Codebase Assistant</h1>
   <nav id="tabs" style="display:none;">
@@ -18,6 +20,8 @@
   </nav>
   <span id="status"></span>
 </header>
+
+<main>
 
 <div id="login-view">
   <p>Log in with your GitHub account to ask questions about the codebase.</p>
@@ -39,7 +43,7 @@
   <div class="home-cards">
     <button type="button" class="home-card" data-view="chat">
       <strong>Chat</strong>
-      <span>Ask questions about the codebase — grounded in what's actually indexed, with citations.</span>
+      <span>Ask questions about the codebase.</span>
     </button>
     <button type="button" class="home-card" data-view="aws">
       <strong>AWS Access</strong>
@@ -54,6 +58,7 @@
 
 <div id="chat-view">
   <div id="messages"></div>
+  <div id="chat-status"></div>
   <form id="chat-form">
     <textarea id="input" rows="2" placeholder="Ask about the codebase…"></textarea>
     <button id="send" type="submit">Send</button>
@@ -64,7 +69,7 @@
   <div id="aws-error"></div>
 
   <h2>LFS access key</h2>
-  <p class="hint">A long-lived access key scoped to just the LFS bucket — set it once for git and forget it. You can only have one at a time; if you lose it, get console access below and delete the old one first.</p>
+  <p class="hint">A long-lived access key scoped to just the LFS bucket. Set it once for git and forget it. You can only have one at a time; if you lose it, get console access below and delete the old one first.</p>
   <div class="row">
     <button type="button" id="aws-lfs-btn">Get LFS Access Key</button>
     <button type="button" id="aws-lfs-delete-btn" class="remove-btn">Delete LFS Access Key</button>
@@ -72,12 +77,12 @@
   <div id="aws-lfs-result" class="reveal-box"></div>
 
   <h2>Console access</h2>
-  <p class="hint">One-time console login for browser access to AWS (S3 browsing, CloudWatch, other devops work) — not needed just for git/LFS. Shown once — copy it immediately.</p>
+  <p class="hint">One-time console login for browser access to AWS (S3 browsing, CloudWatch, other devops work). Not needed just for git/LFS. Shown once. Copy it immediately.</p>
   <button type="button" id="aws-console-btn">Get AWS Console Access</button>
   <div id="aws-console-result" class="reveal-box"></div>
 
   <h2>Temporary credentials</h2>
-  <p class="hint">Short-lived access/secret keys for ad hoc ops work — nothing long-lived is ever created for this flow.</p>
+  <p class="hint">Short-lived access/secret keys for ad hoc ops work. Nothing long-lived is ever created for this flow.</p>
   <button type="button" id="aws-sts-btn">Get Temporary AWS Credentials</button>
   <div id="aws-sts-result" class="reveal-box"></div>
 </div>
@@ -115,6 +120,10 @@
     <button type="button" id="assume-role-btn">Assume Developer Role</button>
   </div>
   <div id="assume-role-result" class="reveal-box"></div>
+</div>
+
+</main>
+
 </div>
 
 <script src="/app.js"></script>

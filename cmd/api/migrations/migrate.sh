@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Runs every .sql file in this directory, in filename order, against
 # $DATABASE_URL. Intended to be run from CI/CD (or by hand) before deploying
-# cmd/api — the service itself only checks the schema exists at startup, it
+# cmd/api. The service itself only checks the schema exists at startup, it
 # never migrates itself. Safe to re-run: each file is idempotent
 # (CREATE TABLE IF NOT EXISTS, etc.).
 #
