@@ -6,7 +6,7 @@ Designers are expected to ask a lot of questions, that's the actual goal of this
 
 **The intended product shape**: the company-paid web chat is the default, free-to-the-user tier, but it isn't meant to be unlimited. A user who consistently exceeds it is expected to graduate to bringing their own Claude account, and from that point on uses the codebase via the Phase 4 MCP server instead of this app's chat UI. That handoff is meant to be a *success path*, not a cutoff, someone who hits the cap should be pointed at exactly how to keep going effectively on their own account, not just told no. Phase 4 (MCP server) ships ahead of this phase specifically so that's already true by the time any of this lands.
 
-Three independent, additive changes, ranked by leverage, each now its own doc since they ship independently and touch different code:
+Four independent, additive changes, ranked by leverage, each now its own doc since they ship independently and touch different code. The first three are structural efficiency with no quality tradeoff; the fourth is a different kind of change, worth reading its own Context section before assuming it belongs in the same bucket.
 
 ## [Phase 6a: Incremental prompt caching in the tool loop](phase-6a-prompt-caching-plan.md)
 
@@ -19,6 +19,10 @@ Small, free win. Citation dedup already stops a chunk from being *listed* twice;
 ## [Phase 6c: Generous per-user daily question cap, with a graduation path attached](phase-6c-daily-question-cap-plan.md)
 
 Safety net, not a quality lever. Depends on [Phase 4b](phase-4b-chat-usage-tracking-plan.md)'s usage tracking (already scoped separately, since visibility into usage is useful on its own, independent of ever adding a cap), this phase adds the threshold check and the graduation-to-MCP messaging on top of that.
+
+## [Phase 6d: Semantic answer cache](phase-6d-semantic-answer-cache-plan.md)
+
+Different in kind from the three above: skips calling the model entirely on a cache hit for a *similar, not identical* question, which is a real correctness risk in exchange for cost savings, not a pure efficiency win. Ships feature-flagged off by default; see its own Context section for why.
 
 ## Verification
 

@@ -88,7 +88,17 @@
 
   <h2>Temporary credentials</h2>
   <p class="hint">Short-lived access/secret keys for ad hoc ops work. Nothing long-lived is ever created for this flow.</p>
-  <button type="button" id="aws-sts-btn">Get Temporary AWS Credentials</button>
+  <div class="row">
+    <select id="aws-sts-duration">
+      <option value="600">10 minutes</option>
+      <option value="1800">30 minutes</option>
+      <option value="3600" selected>1 hour</option>
+      <option value="10800">3 hours</option>
+      <option value="28800">8 hours</option>
+      <option value="43200">12 hours</option>
+    </select>
+    <button type="button" id="aws-sts-btn">Get Temporary AWS Credentials</button>
+  </div>
   <div id="aws-sts-result" class="reveal-box"></div>
 </div>
 

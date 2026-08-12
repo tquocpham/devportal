@@ -46,9 +46,8 @@ aws_secret_access_key: your_provisioner_secret_access_key
 aws_lfs_bucket: your-lfs-bucket-name
 aws_sts_role_arn: arn:aws:iam::<account-id>:role/lfs-s3-contributor-sts
 
-# Optional AWS tuning 
+# Optional AWS tuning
 # defaults live in cmd/api/lib/handlers/aws.go (DefaultAWSConfig).
-# aws_sts_max_session_duration_seconds: 3600 # ceiling; must be <= the role's own MaxSessionDuration
 # aws_iam_username_prefix: ""                # optional prefix on top of the GitHub username
 # aws_lfs_contributor_policy_name: lfs-s3-vengeance-contributor
 # aws_self_manage_policy_name: lfs-s3-self-manage-credentials

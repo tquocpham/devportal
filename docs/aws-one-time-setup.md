@@ -77,7 +77,7 @@ Create a role (e.g. `lfs-s3-contributor-sts`):
 
 - **Trust policy**: `Principal` is the provisioner IAM user's ARN from step 2, `Action: sts:AssumeRole`.
 - **Permissions policy**: same bucket-scoped S3 actions as `lfs-s3-vengeance-contributor`; you can literally attach that managed policy to the role instead of writing a new one.
-- **`MaxSessionDuration`**: set to whatever ceiling you want developers to be able to request (e.g. 12 hours). `aws_sts_max_session_duration_seconds` in config must stay at or below this value; the app clamps requests to it either way.
+- **`MaxSessionDuration`**: set to `43200` (12 hours, AWS's own absolute ceiling for AssumeRole sessions). The app hardcodes the same 43200s ceiling (`stsMaxSessionDurationSeconds` in `aws_sts.go`), not a config value, since neither side of this can ever legitimately be higher.
 
 Record the role's ARN into `aws_sts_role_arn`.
 

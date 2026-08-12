@@ -202,9 +202,6 @@ func main() {
 	awsHandlerCfg.Region = mustGet("aws_region")
 	awsHandlerCfg.Bucket = mustGet("aws_lfs_bucket")
 	awsHandlerCfg.STSRoleARN = mustGet("aws_sts_role_arn")
-	if v := viper.GetInt("aws_sts_max_session_duration_seconds"); v > 0 {
-		awsHandlerCfg.STSMaxSessionDurationSeconds = int32(v)
-	}
 	if v := get("aws_iam_username_prefix", ""); v != "" {
 		awsHandlerCfg.UsernamePrefix = v
 	}

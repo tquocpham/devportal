@@ -44,6 +44,7 @@
   var awsConsoleResult = document.getElementById("aws-console-result");
   var awsStsBtn = document.getElementById("aws-sts-btn");
   var awsStsResult = document.getElementById("aws-sts-result");
+  var awsStsDuration = document.getElementById("aws-sts-duration");
 
   var mcpView = document.getElementById("mcp-view");
   var mcpTabBtn = document.getElementById("mcp-tab-btn");
@@ -540,7 +541,7 @@
       method: "POST",
       credentials: "include",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({}),
+      body: JSON.stringify({ durationSeconds: parseInt(awsStsDuration.value, 10) }),
     })
       .then(function (res) {
         if (!res.ok) return apiErrorMessage(res, "Failed to get temporary credentials").then(function (m) { throw new Error(m); });

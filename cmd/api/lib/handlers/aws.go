@@ -17,13 +17,12 @@ import (
 
 // AWSConfig holds the tunables for AWS self-service (docs/phase-3-aws-access-plan.md).
 type AWSConfig struct {
-	AccountID                    string
-	Region                       string
-	Bucket                       string
-	ContributorPolicyName        string
-	SelfManagePolicyName         string
-	STSRoleARN                   string
-	STSMaxSessionDurationSeconds int32
+	AccountID             string
+	Region                string
+	Bucket                string
+	ContributorPolicyName string
+	SelfManagePolicyName  string
+	STSRoleARN            string
 	// UsernamePrefix optionally namespaces IAM usernames beyond the raw
 	// GitHub login. Empty by default.
 	UsernamePrefix string
@@ -31,9 +30,8 @@ type AWSConfig struct {
 
 func DefaultAWSConfig() AWSConfig {
 	return AWSConfig{
-		ContributorPolicyName:        "lfs-s3-vengeance-contributor",
-		SelfManagePolicyName:         "lfs-s3-self-manage-credentials",
-		STSMaxSessionDurationSeconds: 3600,
+		ContributorPolicyName: "lfs-s3-vengeance-contributor",
+		SelfManagePolicyName:  "lfs-s3-self-manage-credentials",
 	}
 }
 
