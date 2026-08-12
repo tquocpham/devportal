@@ -5,6 +5,7 @@ import (
 	"embed"
 	"errors"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"os/signal"
@@ -60,9 +61,34 @@ func Serve(e *echo.Echo, addr string) error {
 
 func main() {
 	viper.SetConfigType("yaml")
-	viper.SetConfigName("config.local")
 	viper.AddConfigPath(".")
-	viper.ReadInConfig()
+
+	// config.yaml is the base/shared layer (optional); config.local.yaml
+	// (the gitignored dev/local convention) is merged on top and overrides
+	// any key it also defines. MergeInConfig, not ReadInConfig, for both:
+	// a later merge's values win over an earlier one's for shared keys,
+	// which is what actually gives config.local.yaml override precedence.
+	// Previously ReadInConfig's error was discarded entirely, so a
+	// missing/misnamed file didn't fail here, it silently ran with zero
+	// config loaded and surfaced later as a confusing "required config key
+	// %q is not set" fatal from whichever mustGet happened to run first,
+	// not the actual problem. A file that exists but fails to parse still
+	// fails loudly and immediately, that's not swallowed either.
+	loaded := false
+	for _, name := range []string{"config", "config.local"} {
+		viper.SetConfigName(name)
+		if err := viper.MergeInConfig(); err != nil {
+			var notFound viper.ConfigFileNotFoundError
+			if !errors.As(err, &notFound) {
+				log.Fatalf("%s.yaml found but failed to parse: %v", name, err)
+			}
+			continue
+		}
+		loaded = true
+	}
+	if !loaded {
+		log.Fatalf("no config file found (looked for config.yaml and config.local.yaml next to the binary)")
+	}
 
 	githubClientID := mustGet("github_client_id")
 	githubClientSecret := mustGet("github_client_secret")

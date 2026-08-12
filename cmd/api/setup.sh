@@ -1,11 +1,33 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# Fill these in first
-ACCOUNT_ID="371277281859"
-PROVISIONER_USER="devportal-aws-provisioner"
-ROLE_NAME="lfs-s3-contributor-sts"
-BUCKET="samurai-mygame-lfs-prod"
+# Usage: BUCKET=your-lfs-bucket ./setup.sh
+#    or: ./setup.sh your-lfs-bucket
+#
+# Everything else is derived or defaulted, nothing account-specific to
+# hand-edit: ACCOUNT_ID comes from whichever AWS credentials/profile are
+# active, PROVISIONER_USER/ROLE_NAME/the two policy names fall back to this
+# project's naming convention but can be overridden via environment
+# variable, e.g. for a second game/account sharing the same AWS org.
+BUCKET="${BUCKET:-${1:-}}"
+if [[ -z "$BUCKET" ]]; then
+  echo "Usage: BUCKET=your-lfs-bucket $0   (or: $0 your-lfs-bucket)" >&2
+  exit 1
+fi
+
+ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output text)
+PROVISIONER_USER="${PROVISIONER_USER:-devportal-aws-provisioner}"
+ROLE_NAME="${ROLE_NAME:-lfs-s3-contributor-sts}"
+PROVISIONER_POLICY_NAME="${PROVISIONER_POLICY_NAME:-devportal-provisioner-policy}"
+CONTRIBUTOR_POLICY_NAME="${CONTRIBUTOR_POLICY_NAME:-lfs-s3-vengeance-contributor}"
+
+echo "Account:            $ACCOUNT_ID"
+echo "Bucket:              $BUCKET"
+echo "Provisioner user:    $PROVISIONER_USER"
+echo "Role:                $ROLE_NAME"
+echo "Provisioner policy:  $PROVISIONER_POLICY_NAME"
+echo "Contributor policy:  $CONTRIBUTOR_POLICY_NAME"
+echo
 
 if ! aws iam get-user --user-name "$PROVISIONER_USER" &>/dev/null; then
   aws iam create-user --user-name "$PROVISIONER_USER"
@@ -60,16 +82,16 @@ cat > provisioner-policy.json <<POLICY
 POLICY
 
 PROVISIONER_POLICY_ARN=$(aws iam list-policies --scope Local \
-  --query "Policies[?PolicyName=='devportal-provisioner-policy'].Arn" --output text)
+  --query "Policies[?PolicyName=='${PROVISIONER_POLICY_NAME}'].Arn" --output text)
 
 if [[ -z "$PROVISIONER_POLICY_ARN" ]]; then
-  echo "Creating devportal-provisioner-policy..."
+  echo "Creating $PROVISIONER_POLICY_NAME..."
   PROVISIONER_POLICY_ARN=$(aws iam create-policy \
-    --policy-name devportal-provisioner-policy \
+    --policy-name "$PROVISIONER_POLICY_NAME" \
     --policy-document file://provisioner-policy.json \
     --query "Policy.Arn" --output text)
 else
-  echo "devportal-provisioner-policy already exists, pushing the current policy document as a new default version..."
+  echo "$PROVISIONER_POLICY_NAME already exists, pushing the current policy document as a new default version..."
   # IAM caps policies at 5 versions; prune the oldest non-default one first
   # if we're already at the cap, so create-policy-version below never fails
   # just because this script has been re-run a few times.
@@ -130,17 +152,17 @@ else
     --max-session-duration 43200
 fi
 
-# 3. Look up lfs-s3-vengeance-contributor; only create it if it doesn't
-#    already exist (e.g. from a previous Flow A1/A2 run), then attach it to
-#    the role either way. Same lookup-or-create idiom as NEW_LFS_USER.sh and
+# 3. Look up the contributor policy; only create it if it doesn't already
+#    exist (e.g. from a previous Flow A1/A2 run), then attach it to the role
+#    either way. Same lookup-or-create idiom as NEW_LFS_USER.sh and
 #    AWSHandler.lookupOrCreatePolicy. Replaces the old 3a/3b split, which
 #    ran both unconditionally and would either error loudly (policy not
 #    found yet) or fail on create-policy (policy already exists).
 POLICY_ARN=$(aws iam list-policies --scope Local \
-  --query "Policies[?PolicyName=='lfs-s3-vengeance-contributor'].Arn" --output text)
+  --query "Policies[?PolicyName=='${CONTRIBUTOR_POLICY_NAME}'].Arn" --output text)
 
 if [[ -z "$POLICY_ARN" ]]; then
-  echo "Creating lfs-s3-vengeance-contributor..."
+  echo "Creating $CONTRIBUTOR_POLICY_NAME..."
   cat > contributor-policy.json <<POLICY
 {
   "Version": "2012-10-17",
@@ -161,11 +183,11 @@ if [[ -z "$POLICY_ARN" ]]; then
 }
 POLICY
   POLICY_ARN=$(aws iam create-policy \
-    --policy-name lfs-s3-vengeance-contributor \
+    --policy-name "$CONTRIBUTOR_POLICY_NAME" \
     --policy-document file://contributor-policy.json \
     --query "Policy.Arn" --output text)
 else
-  echo "lfs-s3-vengeance-contributor already exists, reusing it..."
+  echo "$CONTRIBUTOR_POLICY_NAME already exists, reusing it..."
 fi
 
 aws iam attach-role-policy \

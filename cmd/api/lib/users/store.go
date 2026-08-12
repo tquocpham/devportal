@@ -16,7 +16,7 @@ import (
 )
 
 // Role is a closed set enforced in Postgres too, via a CHECK constraint
-// (see migrations/0002_add_role_to_allowed_users.sql).
+// (see migrations/0001_create_allowed_users.sql).
 type Role string
 
 const (

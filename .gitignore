@@ -2,6 +2,13 @@
 cmd/api/.env
 **/.env.local
 
+# Policy JSON generated at runtime by cmd/api/setup.sh: real account ID and
+# IAM names once run, no credentials, but no reason to keep in the tree.
+# setup.sh itself is account-agnostic (ACCOUNT_ID derived via `aws sts
+# get-caller-identity`, BUCKET a required argument) and is tracked normally.
+cmd/api/provisioner-policy.json
+cmd/api/trust-policy.json
+
 # Compiled Go binaries (go build in a cmd/* dir names the binary after the dir)
 cmd/api/api
 cmd/indexer/indexer
