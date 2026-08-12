@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Codebase Assistant</title>
+<title>DevPortal</title>
 <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
@@ -11,11 +11,12 @@
 <div id="app-shell">
 
 <header>
-  <h1>Codebase Assistant</h1>
+  <h1>DevPortal</h1>
   <nav id="tabs" style="display:none;">
     <button type="button" class="active" id="home-tab-btn">Home</button>
     <button type="button" id="chat-tab-btn">Chat</button>
     <button type="button" id="aws-tab-btn">AWS Access</button>
+    <button type="button" id="mcp-tab-btn">Claude Code</button>
     <button type="button" id="admin-tab-btn" style="display:none;">Admin</button>
   </nav>
   <span id="status"></span>
@@ -48,6 +49,10 @@
     <button type="button" class="home-card" data-view="aws">
       <strong>AWS Access</strong>
       <span>Get a console login or short-lived credentials for the LFS bucket.</span>
+    </button>
+    <button type="button" class="home-card" data-view="mcp">
+      <strong>Claude Code</strong>
+      <span>Connect your own Claude Code session to search this codebase, billed to your own account.</span>
     </button>
     <button type="button" class="home-card" id="home-admin-card" data-view="admin" style="display:none;">
       <strong>Admin</strong>
@@ -85,6 +90,15 @@
   <p class="hint">Short-lived access/secret keys for ad hoc ops work. Nothing long-lived is ever created for this flow.</p>
   <button type="button" id="aws-sts-btn">Get Temporary AWS Credentials</button>
   <div id="aws-sts-result" class="reveal-box"></div>
+</div>
+
+<div id="mcp-view">
+  <div id="mcp-error"></div>
+
+  <h2>Connect Claude Code</h2>
+  <p class="hint">Once you outgrow the web chat's daily limit, point your own Claude Code session at this codebase's index instead, billed to your own Claude account from then on, not the company's. Get a token below, then run the command it gives you.</p>
+  <button type="button" id="mcp-token-btn">Get Claude Code Token</button>
+  <div id="mcp-token-result" class="reveal-box"></div>
 </div>
 
 <div id="admin-view">

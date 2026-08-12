@@ -45,6 +45,12 @@
   var awsStsBtn = document.getElementById("aws-sts-btn");
   var awsStsResult = document.getElementById("aws-sts-result");
 
+  var mcpView = document.getElementById("mcp-view");
+  var mcpTabBtn = document.getElementById("mcp-tab-btn");
+  var mcpErrorEl = document.getElementById("mcp-error");
+  var mcpTokenBtn = document.getElementById("mcp-token-btn");
+  var mcpTokenResult = document.getElementById("mcp-token-result");
+
   function escapeHtml(s) {
     var div = document.createElement("div");
     div.textContent = s;
@@ -122,10 +128,12 @@
     homeView.style.display = name === "home" ? "flex" : "none";
     chatView.style.display = name === "chat" ? "flex" : "none";
     awsView.style.display = name === "aws" ? "flex" : "none";
+    mcpView.style.display = name === "mcp" ? "flex" : "none";
     adminView.style.display = name === "admin" ? "flex" : "none";
     homeTabBtn.classList.toggle("active", name === "home");
     chatTabBtn.classList.toggle("active", name === "chat");
     awsTabBtn.classList.toggle("active", name === "aws");
+    mcpTabBtn.classList.toggle("active", name === "mcp");
     adminTabBtn.classList.toggle("active", name === "admin");
     if (name === "admin") loadUsers();
     if (name === "chat") input.focus();
@@ -134,6 +142,7 @@
   homeTabBtn.addEventListener("click", function () { showView("home"); });
   chatTabBtn.addEventListener("click", function () { showView("chat"); });
   awsTabBtn.addEventListener("click", function () { showView("aws"); });
+  mcpTabBtn.addEventListener("click", function () { showView("mcp"); });
   adminTabBtn.addEventListener("click", function () { showView("admin"); });
 
   Array.prototype.forEach.call(document.querySelectorAll(".home-card"), function (card) {
@@ -568,6 +577,61 @@
     wrap.appendChild(pre);
     wrap.appendChild(copyBlockButton(exportBlock));
     awsStsResult.appendChild(wrap);
+  }
+
+  function showMcpError(msg) {
+    mcpErrorEl.textContent = msg;
+    mcpErrorEl.style.display = msg ? "block" : "none";
+  }
+
+  mcpTokenBtn.addEventListener("click", function () {
+    showMcpError("");
+    mcpTokenBtn.disabled = true;
+    fetch("/api/v1/me/mcp-token", { method: "POST", credentials: "include" })
+      .then(function (res) {
+        if (!res.ok) return apiErrorMessage(res, "Failed to get a token").then(function (m) { throw new Error(m); });
+        return res.json();
+      })
+      .then(renderMcpTokenResult)
+      .catch(function (err) { showMcpError(err.message); })
+      .finally(function () { mcpTokenBtn.disabled = false; });
+  });
+
+  function renderMcpTokenResult(data) {
+    mcpTokenResult.innerHTML = "";
+    mcpTokenResult.style.display = "flex";
+
+    var note = document.createElement("div");
+    note.className = "field-label";
+    note.textContent = "Shown once. Save this now.";
+    mcpTokenResult.appendChild(note);
+    copyableRow(mcpTokenResult, "Token", data.token);
+
+    var expiry = document.createElement("div");
+    expiry.className = "field-label";
+    expiry.textContent = "Expires " + new Date(data.expiresAt).toLocaleDateString();
+    mcpTokenResult.appendChild(expiry);
+
+    // location.origin, not a server-supplied value: whatever host/port the
+    // browser is actually using right now (localhost in dev, the Tailscale
+    // hostname in production) is exactly the URL Claude Code needs too.
+    var mcpUrl = window.location.origin + "/mcp";
+    var command = 'claude mcp add --transport http devportal ' + mcpUrl +
+      ' --header "Authorization: Bearer ' + data.token + '"';
+
+    var wrap = document.createElement("div");
+    wrap.className = "next-steps";
+    var heading = document.createElement("div");
+    heading.className = "field-label";
+    heading.textContent = "Run this in your terminal to connect Claude Code:";
+    wrap.appendChild(heading);
+    var pre = document.createElement("pre");
+    var code = document.createElement("code");
+    code.textContent = command;
+    pre.appendChild(code);
+    wrap.appendChild(pre);
+    wrap.appendChild(copyBlockButton(command));
+    mcpTokenResult.appendChild(wrap);
   }
 
   function renderProfile(me) {

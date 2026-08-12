@@ -2,7 +2,7 @@
   color-scheme: light dark;
   --bg: #ffffff;
   --fg: #1a1a1a;
-  --muted: #666666;
+  --muted: #888888;
   --border: #e0e0e0;
   --accent: #2f6fed;
   --bubble-user: #eef3ff;
@@ -168,7 +168,7 @@ button {
 }
 button:disabled { opacity: 0.5; cursor: default; }
 
-#home-view, #aws-view, #admin-view {
+#home-view, #aws-view, #mcp-view, #admin-view {
   flex: 1;
   display: none;
   flex-direction: column;
@@ -179,8 +179,8 @@ button:disabled { opacity: 0.5; cursor: default; }
   overflow-y: auto;
   gap: 1rem;
 }
-#home-view h2, #aws-view h2, #admin-view h2 { font-size: 0.9rem; font-weight: 600; margin: 0; color: var(--muted); }
-#admin-error, #aws-error {
+#home-view h2, #aws-view h2, #mcp-view h2, #admin-view h2 { font-size: 0.9rem; font-weight: 600; margin: 0; color: var(--muted); }
+#admin-error, #aws-error, #mcp-error {
   display: none;
   background: var(--danger-bg);
   color: var(--danger);

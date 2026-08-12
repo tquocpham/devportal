@@ -18,6 +18,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/service/iam"
 	"github.com/aws/aws-sdk-go-v2/service/sts"
 	"github.com/devportal/api/lib/handlers"
+	"github.com/devportal/api/lib/mcp"
 	mw "github.com/devportal/api/lib/middleware"
 	"github.com/devportal/api/lib/users"
 	"github.com/devportal/retrieval"
@@ -82,6 +83,16 @@ func main() {
 	databaseURL := mustGet("database_url")
 	anthropicKey := mustGet("anthropic_api_key")
 	embeddingProvider := get("embedding_provider", "voyage")
+
+	// How long a POST /api/v1/me/mcp-token token lasts before it needs
+	// reissuing. Safe to make this long (default 90 days): unlike the 8-hour
+	// web session, mcp.NewTokenVerifier re-checks the allowlist on every MCP
+	// call, so revoking a user's platform access cuts off their MCP access
+	// immediately regardless of how much of this window is left.
+	mcpTokenDuration := 90 * 24 * time.Hour
+	if v := viper.GetInt("mcp_token_duration_seconds"); v > 0 {
+		mcpTokenDuration = time.Duration(v) * time.Second
+	}
 
 	chatCfg := handlers.DefaultChatConfig()
 	if v := get("chat_model", ""); v != "" {
@@ -210,6 +221,13 @@ func main() {
 	webAssets := echo.MustSubFS(webFS, "web")
 	e.StaticFS("/", webAssets)
 
+	// Top-level, not under protected: MCP clients authenticate with the
+	// bearer token minted by POST /api/v1/me/mcp-token, checked inside
+	// mcp.NewHandler itself (sdkauth.RequireBearerToken), not the session
+	// cookie RequireAuth expects. e.Any + echo.WrapHandler because the real
+	// handler is a single http.Handler that dispatches POST/GET/DELETE itself.
+	e.Any("/mcp", echo.WrapHandler(mcp.NewHandler(jwtSecret, userStore, embedder, store, chatCfg.TopK)))
+
 	// Prefix must be non-empty ("/api", not ""): Group.Use registers its own
 	// catch-all route at prefix+"/*" so the middleware always fires, and an
 	// empty prefix puts that catch-all at "/*", the exact pattern the
@@ -220,6 +238,8 @@ func main() {
 	protected.Use(mw.RequireAuth(jwtSecret))
 	protected.GET("/me", handlers.Me)
 	protected.POST("/chat", chat.Chat)
+	mcpToken := handlers.NewMCPTokenHandler(jwtSecret, mcpTokenDuration)
+	protected.POST("/me/mcp-token", mcpToken.MCPToken)
 
 	// AWS self-service (docs/phase-3-aws-access-plan.md).
 	protected.POST("/aws/lfs-access-key", awsHandler.LFSAccessKey)

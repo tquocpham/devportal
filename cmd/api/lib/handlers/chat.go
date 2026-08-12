@@ -124,37 +124,20 @@ func (h *ChatHandler) Chat(c echo.Context) error {
 		"search_codebase",
 		"Search the indexed codebase (source + config files) for content relevant to a query. Returns the closest-matching chunks with their file paths and line ranges. Call this as many times as you need. e.g. search again with a different, more specific query if the first result doesn't settle the question.",
 		func(ctx context.Context, in searchInput) (anthropic.BetaToolResultBlockParamContentUnion, error) {
-			vec, _, err := h.embedder.EmbedQuery(in.Query)
-			if err != nil {
-				return anthropic.BetaToolResultBlockParamContentUnion{}, err
-			}
-			chunks, err := h.store.Search(vec, h.cfg.TopK)
+			text, chunks, err := SearchCodebase(h.embedder, h.store, in.Query, h.cfg.TopK)
 			if err != nil {
 				return anthropic.BetaToolResultBlockParamContentUnion{}, err
 			}
 
-			var b strings.Builder
-			if len(chunks) == 0 {
-				b.WriteString("No results.")
-			}
 			for _, ch := range chunks {
 				key := ch.RelPath + ":" + strconv.Itoa(ch.StartLine) + "-" + strconv.Itoa(ch.EndLine)
 				if !seen[key] {
 					seen[key] = true
 					citations = append(citations, citation{File: ch.RelPath, StartLine: ch.StartLine, EndLine: ch.EndLine})
 				}
-
-				b.WriteString(ch.RelPath)
-				b.WriteString(":")
-				b.WriteString(strconv.Itoa(ch.StartLine))
-				b.WriteString("-")
-				b.WriteString(strconv.Itoa(ch.EndLine))
-				b.WriteString("\n```\n")
-				b.WriteString(ch.Content)
-				b.WriteString("\n```\n\n")
 			}
 
-			return anthropic.BetaToolResultBlockParamContentUnion{OfText: &anthropic.BetaTextBlockParam{Text: b.String()}}, nil
+			return anthropic.BetaToolResultBlockParamContentUnion{OfText: &anthropic.BetaTextBlockParam{Text: text}}, nil
 		},
 	)
 	if err != nil {
