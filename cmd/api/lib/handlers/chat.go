@@ -8,7 +8,9 @@ import (
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/toolrunner"
+	"github.com/devportal/api/lib/usage"
 	"github.com/devportal/retrieval"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/labstack/echo/v4"
 )
 
@@ -54,18 +56,27 @@ func DefaultChatConfig() ChatConfig {
 	}
 }
 
-type ChatHandler struct {
+type ChatHandler interface {
+	Chat(c echo.Context) error
+}
+
+type chatHandler struct {
 	store     *retrieval.Store
 	embedder  retrieval.Embedder
 	anthropic anthropic.Client
+	usage     usage.Store
 	cfg       ChatConfig
 }
 
-func NewChatHandler(store *retrieval.Store, embedder retrieval.Embedder, anthropicClient anthropic.Client, cfg ChatConfig) *ChatHandler {
-	return &ChatHandler{
+func NewChatHandler(
+	store *retrieval.Store, embedder retrieval.Embedder, anthropicClient anthropic.Client,
+	usageStore usage.Store, cfg ChatConfig) ChatHandler {
+
+	return &chatHandler{
 		store:     store,
 		embedder:  embedder,
 		anthropic: anthropicClient,
+		usage:     usageStore,
 		cfg:       cfg,
 	}
 }
@@ -99,13 +110,31 @@ type searchInput struct {
 
 // Chat handles POST /api/v1/chat (registered under the `protected` route group
 // in main.go, so RequireAuth has already validated the session).
-func (h *ChatHandler) Chat(c echo.Context) error {
+func (h *chatHandler) Chat(c echo.Context) error {
 	var req chatRequest
 	if err := c.Bind(&req); err != nil {
 		return echo.NewHTTPError(http.StatusBadRequest, "invalid request body")
 	}
 	if strings.TrimSpace(req.Message) == "" {
 		return echo.NewHTTPError(http.StatusBadRequest, "message is required")
+	}
+
+	// RequireAuth (protected group middleware) guarantees this claim exists
+	// and is valid by the time we get here, same guarantee AssumeRole relies
+	// on without an ok check.
+	claims := c.Get("user").(jwt.MapClaims)
+	username, _ := claims["sub"].(string)
+
+	// Fatal, unlike AddTokens below: this runs before the Anthropic call, so
+	// failing here costs nothing extra, no tokens have been spent yet. If we
+	// silently continued instead, we'd be about to spend real money on a
+	// request that goes completely untracked, the exact blind spot this
+	// feature exists to close, especially once Phase 6c starts enforcing
+	// caps against this same data. Placed before the tool loop starts so a
+	// later threshold check doesn't need to move either.
+	if err := h.usage.Increment(username); err != nil {
+		c.Logger().Errorf("increment chat usage for %s: %v", username, err)
+		return echo.NewHTTPError(http.StatusInternalServerError, "failed to record usage")
 	}
 
 	history := req.History
@@ -164,10 +193,42 @@ func (h *ChatHandler) Chat(c echo.Context) error {
 		},
 	)
 
-	resp, err := runner.RunToCompletion(ctx)
-	if err != nil {
-		c.Logger().Errorf("anthropic tool runner: %v", err)
-		return echo.NewHTTPError(http.StatusInternalServerError, "failed to generate response")
+	// Driving NextMessage manually instead of runner.RunToCompletion(ctx):
+	// RunToCompletion only hands back the final message, discarding every
+	// intermediate round-trip's Usage, which would silently undercount any
+	// question that took more than one search. Each iteration is a
+	// separate, real API call except the very last NextMessage call, which
+	// re-returns the same *BetaMessage pointer a second time purely to
+	// signal "done" (confirmed against betatoolrunner.go's executeTools:
+	// no tool_use blocks means no new API call, r.lastMessage is returned
+	// unchanged). Comparing pointers, not just non-nil, avoids
+	// double-counting that final message's tokens.
+	var resp, prevMsg *anthropic.BetaMessage
+	var totalInputTokens, totalOutputTokens int64
+	for {
+		msg, err := runner.NextMessage(ctx)
+		if err != nil {
+			c.Logger().Errorf("anthropic tool runner: %v", err)
+			return echo.NewHTTPError(http.StatusInternalServerError, "failed to generate response")
+		}
+		if msg == nil {
+			break
+		}
+		if msg != prevMsg {
+			totalInputTokens += msg.Usage.InputTokens
+			totalOutputTokens += msg.Usage.OutputTokens
+			prevMsg = msg
+		}
+		resp = msg
+	}
+
+	// Non-fatal, unlike Increment above: the Anthropic call already
+	// succeeded and already cost real money by this point, failing the
+	// request now wouldn't undo that spend, it would just also deny the
+	// user the answer they already paid for. Logging and returning it
+	// anyway is strictly better than failing here.
+	if err := h.usage.AddTokens(username, totalInputTokens, totalOutputTokens); err != nil {
+		c.Logger().Errorf("add chat token usage for %s: %v", username, err)
 	}
 
 	return c.JSON(http.StatusOK, chatResponse{

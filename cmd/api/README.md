@@ -1,6 +1,6 @@
 # API
 
-The web service designers and developers actually use: GitHub OAuth login, a chat UI backed by retrieval-augmented Claude (grounded in whatever `cmd/indexer` has indexed), self-service AWS access (LFS credentials, console login, temporary ops credentials), and a Postgres-backed login allowlist with roles. Single embedded binary: the whole `web/` directory (`index.html`, `style.css`, `app.js`) is `//go:embed`ded and served via Echo's `StaticFS`, not from a separate static directory.
+The web service designers and developers actually use: GitHub OAuth login, a chat UI backed by retrieval-augmented Claude (grounded in whatever `cmd/indexer` has indexed), self-service AWS access (LFS credentials, console login, temporary ops credentials), a remote MCP server so heavy users can graduate to their own Claude account, and a Postgres-backed login allowlist with roles. Single embedded binary: the whole `web/` directory (`index.html`, `style.css`, `app.js`) is `//go:embed`ded and served via Echo's `StaticFS`, not from a separate static directory.
 
 ## Prerequisites
 
@@ -68,6 +68,19 @@ All three derive the IAM identity from the caller's own GitHub username (same se
 
 Admins can also revoke someone else's console login directly from the Admin tab's users table: **`DELETE /api/v1/admin/users/:username/aws-console-access`** removes their IAM login profile outright (e.g. as part of offboarding), which the self-service flow above deliberately can't do (Flow A2 only ever creates one, never rotates or removes it).
 
+### Claude Code (MCP)
+
+Once someone outgrows the web chat's daily usage, they can point their own Claude Code session at this codebase's index directly, billed to their own Claude account from then on instead of the shared one (design/rationale: [`docs/phase-4-mcp-server-plan.md`](../../docs/phase-4-mcp-server-plan.md)):
+
+1. From the **Claude Code** tab, click **"Get Claude Code Token"**. This calls `POST /api/v1/me/mcp-token`, which mints a long-lived JWT (default 90 days, `mcp_token_duration_seconds` to override) tied to the caller's GitHub identity, shown once in the UI along with a ready-to-paste command.
+2. Run the command it gives you, or construct it yourself:
+   ```bash
+   claude mcp add --transport http devportal http://<host>:<port>/mcp --header "Authorization: Bearer <token>"
+   ```
+3. Ask Claude Code something about the codebase; it has one tool, `search_codebase`, backed by the exact same retrieval logic as the web chat (`handlers.SearchCodebase`, shared by both).
+
+`/mcp` is a top-level route, not under `/api/v1`, and isn't gated by the session cookie `RequireAuth` checks elsewhere: Claude Code authenticates purely via the bearer token from step 1, verified inside the MCP handler itself (`lib/mcp/auth.go`). Unlike the web session, that check re-verifies the caller is still in `allowed_users` on **every** MCP call, not just at token-mint time, so revoking someone's platform access cuts off their MCP access immediately too, it doesn't wait for their 90-day token to expire naturally.
+
 ## Running it
 
 From `cmd/api/`:
@@ -84,3 +97,4 @@ Serves on `:$port` (default `3000`). Visit `http://localhost:3000`: unauthentica
 - Ask the chat a question about a file you know is indexed and confirm the citations look right.
 - Check `SELECT username, role FROM allowed_users;` against the DB matches who you've actually granted.
 - From the AWS Access tab, get an LFS access key, confirm it works (`aws s3 ls s3://<bucket>` with it) but can't do anything else (`aws iam list-users` should fail); delete it and confirm a fresh one issues cleanly.
+- From the Claude Code tab, get a token, `claude mcp add` it, and confirm a real Claude Code session can call `search_codebase` and get back correctly-cited results; confirm a request to `/mcp` with no `Authorization` header (or a garbage token) gets a clean `401`, not a crash.

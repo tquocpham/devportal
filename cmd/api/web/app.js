@@ -7,6 +7,7 @@
   var chatView = document.getElementById("chat-view");
   var messagesEl = document.getElementById("messages");
   var chatStatusEl = document.getElementById("chat-status");
+  var chatUsageIndicator = document.getElementById("chat-usage-indicator");
   var form = document.getElementById("chat-form");
   var input = document.getElementById("input");
   var sendBtn = document.getElementById("send");
@@ -22,6 +23,8 @@
   var addUsernameInput = document.getElementById("add-username");
   var addRoleSelect = document.getElementById("add-role");
   var reposTableBody = document.getElementById("repos-table-body");
+  var chatUsageTableBody = document.getElementById("chat-usage-table-body");
+  var chatUsagePeriodEl = document.getElementById("chat-usage-period");
   var addRepoForm = document.getElementById("add-repo-form");
   var addRepoNameInput = document.getElementById("add-repo-name");
   var addRepoUrlInput = document.getElementById("add-repo-url");
@@ -122,8 +125,30 @@
         sendBtn.disabled = false;
         chatStatusEl.textContent = "";
         input.focus();
+        // Refreshed regardless of success/error: the question count
+        // increments the moment the request is received server-side, even
+        // if generation itself then fails, so usage can change either way.
+        loadMyChatUsage();
       });
   });
+
+  // Self-service usage indicator, so people are at least aware of their
+  // own usage as they chat, not just admins via the Admin tab. Same
+  // billing-period scoping as the admin summary, just for one user.
+  function loadMyChatUsage() {
+    fetch("/api/v1/me/chat-usage", { credentials: "include" })
+      .then(function (res) {
+        if (!res.ok) throw new Error("failed to load usage");
+        return res.json();
+      })
+      .then(function (u) {
+        chatUsageIndicator.textContent =
+          u.total + (u.total === 1 ? " question" : " questions") +
+          " · " + (u.inputTokens + u.outputTokens).toLocaleString() + " tokens this billing period" +
+          " (" + u.inputTokens.toLocaleString() + " input, " + u.outputTokens.toLocaleString() + " output)";
+      })
+      .catch(function () { chatUsageIndicator.textContent = ""; });
+  }
 
   input.addEventListener("keydown", function (e) {
     if (e.key === "Enter" && !e.shiftKey) {
@@ -143,8 +168,8 @@
     awsTabBtn.classList.toggle("active", name === "aws");
     mcpTabBtn.classList.toggle("active", name === "mcp");
     adminTabBtn.classList.toggle("active", name === "admin");
-    if (name === "admin") loadRepoCatalog().then(loadUsers);
-    if (name === "chat") input.focus();
+    if (name === "admin") { loadRepoCatalog().then(loadUsers); loadChatUsage(); }
+    if (name === "chat") { input.focus(); loadMyChatUsage(); }
   }
 
   homeTabBtn.addEventListener("click", function () { showView("home"); });
@@ -404,6 +429,53 @@
       grantRow.appendChild(grantBtn);
       container.appendChild(grantRow);
     }
+  }
+
+  function loadChatUsage() {
+    fetch("/api/v1/admin/chat-usage", { credentials: "include" })
+      .then(function (res) {
+        if (!res.ok) return apiErrorMessage(res, "Failed to load chat usage").then(function (m) { throw new Error(m); });
+        return res.json();
+      })
+      .then(renderChatUsage)
+      .catch(function (err) { showAdminError(err.message); });
+  }
+
+  function renderChatUsage(data) {
+    var start = data.periodStart ? new Date(data.periodStart) : null;
+    // periodEnd is exclusive (the first day of the *next* period), show the
+    // last real day of this one instead of that boundary date.
+    var end = data.periodEnd ? new Date(new Date(data.periodEnd).getTime() - 86400000) : null;
+    chatUsagePeriodEl.textContent = start && end
+      ? "Current billing period: " + start.toLocaleDateString() + " – " + end.toLocaleDateString() + ". Visibility only for now, no caps."
+      : "Visibility only for now, no caps.";
+
+    chatUsageTableBody.innerHTML = "";
+    (data.users || []).forEach(function (u) {
+      var tr = document.createElement("tr");
+
+      var usernameTd = document.createElement("td");
+      usernameTd.textContent = u.username;
+      tr.appendChild(usernameTd);
+
+      var totalTd = document.createElement("td");
+      totalTd.textContent = u.total;
+      tr.appendChild(totalTd);
+
+      var inputTd = document.createElement("td");
+      inputTd.textContent = (u.inputTokens || 0).toLocaleString();
+      tr.appendChild(inputTd);
+
+      var outputTd = document.createElement("td");
+      outputTd.textContent = (u.outputTokens || 0).toLocaleString();
+      tr.appendChild(outputTd);
+
+      var lastDayTd = document.createElement("td");
+      lastDayTd.textContent = u.lastDay ? new Date(u.lastDay).toLocaleDateString() : "";
+      tr.appendChild(lastDayTd);
+
+      chatUsageTableBody.appendChild(tr);
+    });
   }
 
   function changeRole(username, role) {

@@ -22,6 +22,7 @@ import (
 	"github.com/devportal/api/lib/mcp"
 	mw "github.com/devportal/api/lib/middleware"
 	"github.com/devportal/api/lib/repos"
+	"github.com/devportal/api/lib/usage"
 	"github.com/devportal/api/lib/users"
 	"github.com/devportal/retrieval"
 	"github.com/labstack/echo/v4"
@@ -138,6 +139,14 @@ func main() {
 		chatCfg.MaxIterations = v
 	}
 
+	// Day of month the Anthropic billing cycle resets on; 1 = calendar
+	// month. Clamped to [1, 28] so every month actually has that day,
+	// no Feb 30 edge cases to reason about.
+	billingPeriodStart := 1
+	if v := viper.GetInt("billing_period_start_day"); v > 0 {
+		billingPeriodStart = min(max(v, 1), 28)
+	}
+
 	logger := logrus.New()
 	logger.SetFormatter(&logrus.JSONFormatter{})
 	level, err := logrus.ParseLevel(logLevel)
@@ -187,6 +196,14 @@ func main() {
 		logger.Fatalf("repos table not ready; run cmd/api/migrations/migrate.sh via CI/CD first: %v", err)
 	}
 
+	usageStore, err := usage.NewStore(databaseURL)
+	if err != nil {
+		logger.Fatalf("usage DB connection failed: %v", err)
+	}
+	if err := usageStore.CheckSchema(); err != nil {
+		logger.Fatalf("chat_usage table not ready; run cmd/api/migrations/migrate.sh via CI/CD first: %v", err)
+	}
+
 	auth := handlers.NewAuthHandler(
 		githubClientID, githubClientSecret, callbackURL, allowedOrg,
 		jwtSecret, userStore)
@@ -210,7 +227,7 @@ func main() {
 	}
 
 	anthropicClient := anthropic.NewClient(option.WithAPIKey(anthropicKey))
-	chat := handlers.NewChatHandler(store, embedder, anthropicClient, chatCfg)
+	chat := handlers.NewChatHandler(store, embedder, anthropicClient, usageStore, chatCfg)
 
 	// AWS self-service (docs/phase-3-aws-access-plan.md). The provisioner's
 	// own credentials, not per-user; see docs/aws-one-time-setup.md for the
@@ -274,6 +291,8 @@ func main() {
 	protected.POST("/me/mcp-token", mcpToken.MCPToken)
 	reposHandler := handlers.NewReposHandler(repoStore)
 	protected.GET("/repos", reposHandler.List)
+	chatUsageHandler := handlers.NewChatUsageHandler(usageStore, billingPeriodStart)
+	protected.GET("/me/chat-usage", chatUsageHandler.Me)
 
 	// AWS self-service (docs/phase-3-aws-access-plan.md).
 	protected.POST("/aws/lfs-access-key", awsHandler.LFSAccessKey)
@@ -283,6 +302,7 @@ func main() {
 
 	adminUsers := handlers.NewAdminUsersHandler(userStore)
 	adminRepos := handlers.NewAdminReposHandler(repoStore)
+	adminChatUsage := handlers.NewAdminChatUsageHandler(usageStore, billingPeriodStart)
 	assumeRole := handlers.NewAssumeRoleHandler(jwtSecret)
 	admin := protected.Group("/admin")
 	admin.Use(mw.RequireAdmin)
@@ -297,6 +317,7 @@ func main() {
 	admin.GET("/users/:username/repos", adminRepos.ListForUser)
 	admin.POST("/users/:username/repos", adminRepos.Grant)
 	admin.DELETE("/users/:username/repos/:repoId", adminRepos.Revoke)
+	admin.GET("/chat-usage", adminChatUsage.List)
 	admin.POST("/assume-role", assumeRole.AssumeRole)
 
 	// e.Logger.Fatal(e.Start(":" + port))

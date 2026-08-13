@@ -67,6 +67,7 @@
 </div>
 
 <div id="chat-view">
+  <div id="chat-usage-indicator"></div>
   <div id="messages"></div>
   <div id="chat-status"></div>
   <form id="chat-form">
@@ -149,6 +150,15 @@
       <tr><th>Username</th><th>Role</th><th>Added</th><th>Repos</th><th></th></tr>
     </thead>
     <tbody id="users-table-body"></tbody>
+  </table>
+
+  <h2>Chat usage</h2>
+  <p class="hint" id="chat-usage-period"></p>
+  <table class="users-table">
+    <thead>
+      <tr><th>Username</th><th>Questions</th><th>Input tokens</th><th>Output tokens</th><th>Last asked</th></tr>
+    </thead>
+    <tbody id="chat-usage-table-body"></tbody>
   </table>
 
   <h2>Test as a different role</h2>
