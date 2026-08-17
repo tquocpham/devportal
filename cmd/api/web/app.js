@@ -665,30 +665,149 @@
     awsLfsResult.appendChild(note);
     copyableRow(awsLfsResult, "AWS_ACCESS_KEY_ID", data.accessKeyId);
     copyableRow(awsLfsResult, "AWS_SECRET_ACCESS_KEY", data.secretAccessKey);
-    renderLfsNextSteps(awsLfsResult, data);
+    renderLfsSetupSteps(awsLfsResult, data);
   }
 
-  // Builds the "set this up on your machine" block below a freshly issued
-  // LFS key: the same env vars lfs-s3 needs, pre-filled with the real key,
-  // bucket, and region, since making the user copy these by hand into the
-  // right shell profile file is the actual point of friction here.
-  function renderLfsNextSteps(container, data) {
+  // Small inline <code>text</code> helper. Kept consistent with the rest of
+  // this file: no innerHTML/raw HTML strings for content, even static text.
+  function inlineCode(text) {
+    var code = document.createElement("code");
+    code.className = "inline-code";
+    code.textContent = text;
+    return code;
+  }
+
+  function lfsReleasesLink() {
+    var a = document.createElement("a");
+    a.href = "https://github.com/nicolas-graves/lfs-s3/releases";
+    a.target = "_blank";
+    a.rel = "noopener noreferrer";
+    a.textContent = "lfs-s3 releases page";
+    return a;
+  }
+
+  function lfsSubheading(text) {
+    var h = document.createElement("div");
+    h.className = "next-steps-subheading";
+    h.textContent = text;
+    return h;
+  }
+
+  function buildLfsInstallWindows() {
+    var wrap = document.createElement("div");
+    wrap.appendChild(lfsSubheading("1. Install the client"));
+    var ol = document.createElement("ol");
+
+    function step(nodes) {
+      var li = document.createElement("li");
+      nodes.forEach(function (n) { li.appendChild(typeof n === "string" ? document.createTextNode(n) : n); });
+      ol.appendChild(li);
+      return li;
+    }
+
+    step(["Go to the ", lfsReleasesLink(), " and download the Windows build (look for a file with ", inlineCode("windows"), " in the name, e.g. ", inlineCode("lfs-s3_windows_amd64.exe"), ")."]);
+    step(["Rename the downloaded file to ", inlineCode("lfs-s3.exe"), "."]);
+    step(["Create a folder to hold it, e.g. ", inlineCode("C:\\tools"), ", and move ", inlineCode("lfs-s3.exe"), " there."]);
+
+    var pathStep = step(["Add that folder to your PATH so Windows can find it:"]);
+    var pathSub = document.createElement("ol");
+    pathSub.className = "sub-steps";
+    [
+      ["Press the Windows key and type ", inlineCode("environment variables"), "."],
+      ["Open \"Edit the system environment variables\"."],
+      ["Click \"Environment Variables...\"."],
+      ["Under \"User variables\", select \"Path\", then click \"Edit...\"."],
+      ["Click \"New\" and paste in the folder path (e.g. ", inlineCode("C:\\tools"), ")."],
+      ["Click \"OK\" on every open dialog to save."],
+    ].forEach(function (nodes) {
+      var subLi = document.createElement("li");
+      nodes.forEach(function (n) { subLi.appendChild(typeof n === "string" ? document.createTextNode(n) : n); });
+      pathSub.appendChild(subLi);
+    });
+    pathStep.appendChild(pathSub);
+
+    var lastStep = step(["Close and reopen Git Bash, then confirm it's found:"]);
+    var pre = document.createElement("pre");
+    var code = document.createElement("code");
+    code.textContent = "lfs-s3 --help";
+    pre.appendChild(code);
+    lastStep.appendChild(pre);
+    var confirmHint = document.createElement("p");
+    confirmHint.className = "hint";
+    confirmHint.textContent = "If you see usage text (not \"command not found\"), it worked. If it's not found, double-check the folder path you added to PATH matches exactly where you put the .exe.";
+    lastStep.appendChild(confirmHint);
+
+    wrap.appendChild(ol);
+    return wrap;
+  }
+
+  function buildLfsInstallMacLinux() {
+    var wrap = document.createElement("div");
+    wrap.appendChild(lfsSubheading("1. Install the client"));
+
+    var p = document.createElement("p");
+    p.className = "hint";
+    p.appendChild(document.createTextNode("Download the build for your OS from the same "));
+    p.appendChild(lfsReleasesLink());
+    p.appendChild(document.createTextNode(", then:"));
+    wrap.appendChild(p);
+
+    var cmdText = "chmod +x ~/Downloads/lfs-s3_*\nmv ~/Downloads/lfs-s3_* /usr/local/bin/lfs-s3";
+    var pre = document.createElement("pre");
+    var code = document.createElement("code");
+    code.textContent = cmdText;
+    pre.appendChild(code);
+    wrap.appendChild(pre);
+    wrap.appendChild(copyBlockButton(cmdText));
+
+    var adjustHint = document.createElement("p");
+    adjustHint.className = "hint";
+    adjustHint.textContent = "(adjust the filename to whatever you actually downloaded)";
+    wrap.appendChild(adjustHint);
+
+    return wrap;
+  }
+
+  function buildLfsEnvStep(profileText, envBlock) {
+    var wrap = document.createElement("div");
+    wrap.appendChild(lfsSubheading("2. Set environment variables"));
+
+    var profileHint = document.createElement("p");
+    profileHint.className = "hint";
+    profileHint.textContent = profileText;
+    wrap.appendChild(profileHint);
+
+    var pre = document.createElement("pre");
+    var code = document.createElement("code");
+    code.textContent = envBlock;
+    pre.appendChild(code);
+    wrap.appendChild(pre);
+
+    wrap.appendChild(copyBlockButton(envBlock));
+    return wrap;
+  }
+
+  // Builds the combined "set this up on your machine" block below a freshly
+  // issued LFS key: installing the client, then the env vars it needs
+  // (pre-filled with the real key, bucket, and region), under a single
+  // Windows/Mac-Linux selector so switching OS updates both steps at once
+  // instead of making the user pick the same OS twice.
+  function renderLfsSetupSteps(container, data) {
     var endpoint = "https://s3." + data.region + ".amazonaws.com";
-    var envLines = [
+    var envBlock = [
       "export AWS_ACCESS_KEY_ID=" + data.accessKeyId,
       "export AWS_SECRET_ACCESS_KEY=" + data.secretAccessKey,
       "export AWS_REGION=" + data.region,
       "export S3_BUCKET=" + data.bucket,
       "export AWS_S3_ENDPOINT=" + endpoint,
-    ];
-    var envBlock = envLines.join("\n");
+    ].join("\n");
 
     var wrap = document.createElement("div");
     wrap.className = "next-steps";
 
     var heading = document.createElement("div");
     heading.className = "field-label";
-    heading.textContent = "Next: set these as environment variables so lfs-s3 can find them";
+    heading.textContent = "Set up lfs-s3 on this machine";
     wrap.appendChild(heading);
 
     var body = document.createElement("div");
@@ -703,25 +822,30 @@
     content.className = "next-steps-content";
     body.appendChild(content);
 
-    var profileHint = document.createElement("p");
-    profileHint.className = "hint";
-    content.appendChild(profileHint);
-
-    var pre = document.createElement("pre");
-    var code = document.createElement("code");
-    code.textContent = envBlock;
-    pre.appendChild(code);
-    content.appendChild(pre);
-
-    content.appendChild(copyBlockButton(envBlock));
-
     var profiles = {
-      "Windows (Git Bash)": "Open Git Bash, run: notepad ~/.bash_profile, paste the lines above in, save, then run: source ~/.bash_profile to apply it to the current window.",
-      "Mac / Linux": "Add the lines above to your shell profile (~/.zshrc, or ~/.bash_profile / ~/.bashrc if you use bash), then run: source ~/.zshrc (or whichever file you edited).",
+      "Windows (Git Bash)": function () {
+        var frag = document.createElement("div");
+        frag.appendChild(buildLfsInstallWindows());
+        frag.appendChild(buildLfsEnvStep(
+          "Open Git Bash, run: notepad ~/.bash_profile, paste the lines above in, save, then run: source ~/.bash_profile to apply it to the current window.",
+          envBlock
+        ));
+        return frag;
+      },
+      "Mac / Linux": function () {
+        var frag = document.createElement("div");
+        frag.appendChild(buildLfsInstallMacLinux());
+        frag.appendChild(buildLfsEnvStep(
+          "Add the lines above to your shell profile (~/.zshrc, or ~/.bash_profile / ~/.bashrc if you use bash), then run: source ~/.zshrc (or whichever file you edited).",
+          envBlock
+        ));
+        return frag;
+      },
     };
     var menuButtons = [];
     function selectProfile(name) {
-      profileHint.textContent = profiles[name];
+      content.innerHTML = "";
+      content.appendChild(profiles[name]());
       menuButtons.forEach(function (b) { b.classList.toggle("active", b.textContent === name); });
     }
     Object.keys(profiles).forEach(function (name) {

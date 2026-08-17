@@ -394,3 +394,25 @@ table.users-table td { padding: 0.5rem 0.6rem; border-bottom: 1px solid var(--bo
   font-size: 0.8rem;
   white-space: pre;
 }
+.next-steps ol {
+  margin: 0;
+  padding-left: 1.25rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+.next-steps ol li { line-height: 1.5; font-size: 0.85rem; color: var(--muted); }
+.next-steps ol.sub-steps { margin-top: 0.4rem; }
+.next-steps-subheading {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--fg);
+  margin: 0;
+}
+.next-steps-subheading:not(:first-child) { margin-top: 0.75rem; }
+.next-steps .inline-code {
+  background: var(--code-bg);
+  border-radius: 4px;
+  padding: 0.1rem 0.3rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
